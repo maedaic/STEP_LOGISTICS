@@ -187,7 +187,7 @@ function renderProductMasterAccordion() {
   body.hidden = !open;
   const unknown = PRODUCT_MASTER.filter(m => {
     const eff = getProductMaster(m.code);
-    return eff.weight == null || eff.stackable == null;
+    return eff.stackable == null;
   }).length;
   document.getElementById('pmAccCount').textContent = unknown > 0 ? `未入力 ${unknown}件` : '入力済み';
   if (open) renderProductMasterList();
@@ -215,22 +215,6 @@ function renderProductMasterList() {
     info.className = 'pm-info';
     info.innerHTML = `<span class="pm-code">${m.code}</span><span class="pm-name">${m.name}</span>`;
     row.appendChild(info);
-
-    const weightField = document.createElement('label');
-    weightField.className = 'pm-field';
-    weightField.innerHTML = `<span>重量(kg)</span>`;
-    const weightInput = document.createElement('input');
-    weightInput.type = 'number';
-    weightInput.min = '0';
-    weightInput.placeholder = '不明';
-    weightInput.value = m.weight != null ? m.weight : '';
-    weightInput.addEventListener('change', () => {
-      const v = weightInput.value.trim();
-      setProductOverride(m.code, 'weight', v === '' ? null : Math.max(0, parseFloat(v)));
-      renderProductMasterAccordion();
-    });
-    weightField.appendChild(weightInput);
-    row.appendChild(weightField);
 
     const stackField = document.createElement('label');
     stackField.className = 'pm-field';
@@ -268,6 +252,17 @@ function renderProductMasterList() {
 
     host.appendChild(row);
   });
+
+  // 保存ボタン（編集内容は入力のたびに自動保存済み。押すと「確定」として一覧を閉じる）
+  const saveRow = document.createElement('div');
+  saveRow.className = 'pm-save-row';
+  saveRow.innerHTML = `<button class="btn btn-primary" id="pmSaveBtn">保存</button>`;
+  saveRow.querySelector('#pmSaveBtn').addEventListener('click', () => {
+    accOpen.pm = false;
+    renderProductMasterAccordion();
+    toast('商品マスターを保存しました');
+  });
+  host.appendChild(saveRow);
 }
 
 /**
@@ -1096,7 +1091,7 @@ function placeUnits(units, targetTruckId) {
 
   const failedByCode = {};   // 積み切れなかった商品を品番ごとに集計（指示書Ver.2 §10）
 
-  let placed = 0, failed = 0, overflowed = 0;
+  let placed = 0, failed = 0;
 
   units.forEach(code => {
     const info = productInfo(code);
@@ -1125,26 +1120,15 @@ function placeUnits(units, targetTruckId) {
       }
     }
 
-    // ②フォールバック: 候補トラックのどれにも収まる場所が無ければ、先頭候補へ
-    // はみ出しを許容して置く（配置を諦めない。警告表示は描画側で行う）
-    if (!placedHere && pool.length > 0) {
-      const t = pool[0];
-      const m = truckDims(t);
-      const margin = Math.max(fp0.lenX, fp0.lenY, fp90.lenX, fp90.lenY) + 50;
-      const free = computeFreeRects(t, m, margin, margin);
-      const best = bestFreeRectFit(free, fp0, fp90);
-      if (best) {
-        state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
-        placed++; placedHere = true; overflowed++;
-      }
-    }
+    // 荷台の実寸内に収まらない場合は、はみ出させて無理に置かない。積まずに残し、
+    // 「商品が残っています」として一覧で警告する（指示書Ver.2追記：はみ出し配置の廃止）
     if (!placedHere) { failed++; failedByCode[code] = (failedByCode[code] || 0) + 1; }
   });
 
   renderProductList();
   renderCanvases();
   saveToLocal();
-  return { placed, failed, overflowed, failedByCode };
+  return { placed, failed, failedByCode };
 }
 
 /** 同一品番で積み余地がある配置のうち最も前方(小x)のものを返す（truckIdを指定するとそのトラック内のみ対象） */
@@ -1162,8 +1146,6 @@ function frontmostStackable(code, maxStack, truckId) {
 function placeResultToast(prefix, r) {
   if (r.failed > 0) {
     showResidualWarning(r);   // 積み切れなかった商品を品番ごとに一覧表示（指示書Ver.2 §10）
-  } else if (r.overflowed > 0) {
-    toast(`${prefix}${r.placed}個を配置（うち${r.overflowed}個ははみ出しあり・要確認）`);
   } else {
     toast(`${prefix}${r.placed}個を配置しました`);
   }
