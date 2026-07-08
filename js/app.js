@@ -173,12 +173,36 @@ function renderTruckGroup(group, host) {
   });
 }
 
+/**
+ * 手入力(state.manual)に同一品番の行が複数あれば1行へ統合する（自己修復）。
+ * 追加時のマージ漏れ（旧バージョンで作られたデータ含む）を都度解消し、
+ * 「手入力」グループに同じ品番が2行以上並ぶ状態を残さない。
+ */
+function mergeManualDuplicates() {
+  const seen = new Map();   // code -> merged entry
+  const merged = [];
+  state.manual.forEach(m => {
+    const cur = seen.get(m.code);
+    if (cur) {
+      cur.qty += m.qty;
+      if (!cur.def && m.def) cur.def = m.def;
+    } else {
+      const copy = { ...m };
+      seen.set(m.code, copy);
+      merged.push(copy);
+    }
+  });
+  state.manual = merged;
+}
+
 /* ---------------------------------------------------------------------------
  * 商品一覧の集計（Ver1.2 §3）
  *   商品一覧 = アップロード伝票(slips)のOCR結果 ＋ 手入力(manual) を品番で合算。
  *   これにより「複数伝票で同じ品番」も自動集計され、伝票を削除すれば数量も戻る。
  * ------------------------------------------------------------------------- */
 function rebuildProducts() {
+  mergeManualDuplicates();   // 過去に分かれて保存された同一品番の手入力行を統合（自己修復）
+
   const agg = new Map();   // code -> { qty, def }
   const add = (code, qty, def) => {
     const cur = agg.get(code) || { qty: 0, def: null };
