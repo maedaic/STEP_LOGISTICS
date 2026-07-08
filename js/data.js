@@ -137,9 +137,34 @@ const PRODUCT_MASTER = [
   { code: 'C12C',    name: 'ガラスハイケース W1200×H1800',  category: 'ガラスハイケース', width: 1200, depth: 500, height: 1800, price: 24200, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0284c7' },
 ];
 
-/** 商品マスターから1件取得 */
+/**
+ * 商品マスターの詳細不明部分（weight/stackable/maxStack等）を後から記入するための上書き層。
+ * PRODUCT_MASTER 本体は編集せず、localStorage に差分だけ保存して重ねる。
+ */
+const PRODUCT_OVERRIDES_KEY = 'stepstudio_product_overrides';
+let PRODUCT_OVERRIDES = {};
+try {
+  PRODUCT_OVERRIDES = JSON.parse(localStorage.getItem(PRODUCT_OVERRIDES_KEY) || '{}');
+} catch (_) { PRODUCT_OVERRIDES = {}; }
+
+function saveProductOverrides() {
+  try { localStorage.setItem(PRODUCT_OVERRIDES_KEY, JSON.stringify(PRODUCT_OVERRIDES)); } catch (_) { /* file:// 等で不可でも無視 */ }
+}
+
+/** 商品マスターの1項目を編集して保存する（value===nullで未入力に戻す） */
+function setProductOverride(code, field, value) {
+  const ov = PRODUCT_OVERRIDES[code] || {};
+  if (value === null) { delete ov[field]; } else { ov[field] = value; }
+  if (Object.keys(ov).length === 0) { delete PRODUCT_OVERRIDES[code]; } else { PRODUCT_OVERRIDES[code] = ov; }
+  saveProductOverrides();
+}
+
+/** 商品マスターから1件取得（上書き済みの詳細があればマージして返す） */
 function getProductMaster(code) {
-  return PRODUCT_MASTER.find(p => p.code === code) || null;
+  const base = PRODUCT_MASTER.find(p => p.code === code);
+  if (!base) return null;
+  const ov = PRODUCT_OVERRIDES[code];
+  return ov ? { ...base, ...ov } : base;
 }
 
 /** トラックマスターから1件取得 */

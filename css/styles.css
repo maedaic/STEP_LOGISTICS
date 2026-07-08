@@ -182,6 +182,22 @@ input, textarea { font-family: inherit; }
 .accordion-body { padding: 12px; border-top: 1px solid var(--line); }
 .accordion-body .truck-master-list { max-height: 420px; overflow-y: auto; }
 
+/* 商品マスター一覧（詳細不明部分の編集） */
+.product-master-list { max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.pm-cat { font-size: 11px; font-weight: 700; color: var(--text-mut); padding: 8px 2px 2px; }
+.pm-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fff;
+}
+.pm-info { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; }
+.pm-code { font-weight: 700; font-size: 13px; }
+.pm-name { font-size: 11px; color: var(--text-sub); }
+.pm-field { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--text-mut); }
+.pm-field input, .pm-field select {
+  width: 76px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font-size: 12px;
+}
+.pm-field input:disabled { background: #f3f4f6; color: var(--text-mut); }
+
 /* アップロード伝票サムネイル一覧 */
 #slipList { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
 .slip-row {

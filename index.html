@@ -55,6 +55,18 @@
         </div>
       </div>
 
+      <!-- 商品マスター（重量・積み重ね可否など、詳細不明部分を後から記入できる編集欄） -->
+      <div class="truck-accordion">
+        <button class="accordion-head" id="pmAccHead" aria-expanded="false">
+          <span class="acc-caret">▶</span>
+          <span class="acc-title">商品マスター（詳細を編集）</span>
+          <span class="acc-count" id="pmAccCount"></span>
+        </button>
+        <div class="accordion-body" id="pmAccBody" hidden>
+          <div class="product-master-list" id="productMasterList"><!-- JSで生成 --></div>
+        </div>
+      </div>
+
       <!-- ② 商品アップロード（複数・サムネイル管理） -->
       <div class="section-title">商品アップロード</div>
       <div class="upload-box" id="uploadBox">

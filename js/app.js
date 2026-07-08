@@ -25,7 +25,7 @@ let state = {
 
 let pickedCode = null;   // クリック配置用に選択中の品番
 let selectedPid = null;  // キャンバス上で選択中の配置（Deleteキー対象）
-let accOpen = { step: false, gaisha: false }; // トラック一覧アコーディオンの開閉（グループ別）
+let accOpen = { step: false, gaisha: false, pm: false }; // トラック一覧・商品マスターアコーディオンの開閉
 let uidCounter = 1;
 const uid = (p) => `${p}_${Date.now().toString(36)}_${uidCounter++}`;
 
@@ -89,6 +89,7 @@ function renderAll() {
   document.getElementById('projectName').value = state.projectName;
   renderTruckMasterList();
   renderTruckAccordions();
+  renderProductMasterAccordion();
   renderUploads();
   renderManualSlipOptions();
   renderProductList();
@@ -171,6 +172,100 @@ function renderTruckGroup(group, host) {
     }
     card.addEventListener('click', () => addTruck(m.id));
     host.appendChild(card);
+  });
+}
+
+/* ---------- 左：商品マスター一覧（詳細不明部分を後から記入） ---------- */
+function renderProductMasterAccordion() {
+  const head = document.getElementById('pmAccHead');
+  const body = document.getElementById('pmAccBody');
+  if (!head || !body) return;
+  const open = accOpen.pm;
+  head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  head.querySelector('.acc-caret').textContent = open ? '▼' : '▶';
+  body.hidden = !open;
+  const unknown = PRODUCT_MASTER.filter(m => {
+    const eff = getProductMaster(m.code);
+    return eff.weight == null || eff.stackable == null;
+  }).length;
+  document.getElementById('pmAccCount').textContent = unknown > 0 ? `未入力 ${unknown}件` : '入力済み';
+  if (open) renderProductMasterList();
+}
+
+function renderProductMasterList() {
+  const host = document.getElementById('productMasterList');
+  if (!host) return;
+  host.innerHTML = '';
+  let lastCategory = null;
+  PRODUCT_MASTER.forEach((base) => {
+    const m = getProductMaster(base.code);
+    if (m.category !== lastCategory) {
+      lastCategory = m.category;
+      const cat = document.createElement('div');
+      cat.className = 'pm-cat';
+      cat.textContent = m.category || '未分類';
+      host.appendChild(cat);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'pm-row';
+
+    const info = document.createElement('span');
+    info.className = 'pm-info';
+    info.innerHTML = `<span class="pm-code">${m.code}</span><span class="pm-name">${m.name}</span>`;
+    row.appendChild(info);
+
+    const weightField = document.createElement('label');
+    weightField.className = 'pm-field';
+    weightField.innerHTML = `<span>重量(kg)</span>`;
+    const weightInput = document.createElement('input');
+    weightInput.type = 'number';
+    weightInput.min = '0';
+    weightInput.placeholder = '不明';
+    weightInput.value = m.weight != null ? m.weight : '';
+    weightInput.addEventListener('change', () => {
+      const v = weightInput.value.trim();
+      setProductOverride(m.code, 'weight', v === '' ? null : Math.max(0, parseFloat(v)));
+      renderProductMasterAccordion();
+    });
+    weightField.appendChild(weightInput);
+    row.appendChild(weightField);
+
+    const stackField = document.createElement('label');
+    stackField.className = 'pm-field';
+    stackField.innerHTML = `<span>積み重ね</span>`;
+    const stackSelect = document.createElement('select');
+    stackSelect.innerHTML = `
+      <option value="">不明</option>
+      <option value="true">可</option>
+      <option value="false">不可</option>`;
+    stackSelect.value = m.stackable === true ? 'true' : m.stackable === false ? 'false' : '';
+    stackSelect.addEventListener('change', () => {
+      const v = stackSelect.value;
+      setProductOverride(m.code, 'stackable', v === '' ? null : v === 'true');
+      renderProductMasterAccordion();
+    });
+    stackField.appendChild(stackSelect);
+    row.appendChild(stackField);
+
+    const maxStackField = document.createElement('label');
+    maxStackField.className = 'pm-field';
+    maxStackField.innerHTML = `<span>最大段数</span>`;
+    const maxStackInput = document.createElement('input');
+    maxStackInput.type = 'number';
+    maxStackInput.min = '1';
+    maxStackInput.placeholder = '不明';
+    maxStackInput.value = m.maxStack != null ? m.maxStack : '';
+    maxStackInput.disabled = m.stackable !== true;
+    maxStackInput.addEventListener('change', () => {
+      const v = maxStackInput.value.trim();
+      setProductOverride(m.code, 'maxStack', v === '' ? null : Math.max(1, parseInt(v, 10) || 1));
+      renderProductMasterAccordion();
+    });
+    maxStackField.appendChild(maxStackInput);
+    row.appendChild(maxStackField);
+
+    host.appendChild(row);
   });
 }
 
@@ -1071,6 +1166,7 @@ function bindGlobalControls() {
   // トラック一覧アコーディオン開閉（STEP車両 / 業者トラック）§LEFT-001/004
   document.getElementById('stepAccHead').addEventListener('click', () => { accOpen.step = !accOpen.step; renderTruckAccordions(); });
   document.getElementById('gaishaAccHead').addEventListener('click', () => { accOpen.gaisha = !accOpen.gaisha; renderTruckAccordions(); });
+  document.getElementById('pmAccHead').addEventListener('click', () => { accOpen.pm = !accOpen.pm; renderProductMasterAccordion(); });
 
   // 中央「＋ トラック追加」→ トラックピッカー
   document.getElementById('btnAddTruckDashed').addEventListener('click', openTruckPicker);
