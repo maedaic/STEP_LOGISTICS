@@ -667,28 +667,62 @@ function insideCargo(rect, m) {
 }
 
 /**
- * 接触度スコア（AUTO-001/002）: 壁・既存商品にどれだけ隙間なく接するかを数値化する。
- * スコアが高いほど「浮いた隙間」を作らない配置。縦横どちらの向きが良いかは決め打ちせず、
- * このスコアが高い向き・位置を機械的に選ぶ（＝デッドスペースを作らないことを最優先）。
+ * 空き長方形ベースの配置（AUTO-001/002・MaxRects方式）
+ *  グリッド走査＋接触スコアでは、局所的には良さそうでも全体では中途半端な穴を残すことがあった。
+ *  荷台の「空きスペースの形」そのものを長方形の集合として正確に管理し、
+ *  商品は必ずどこかの空き長方形の前方・左端（＝Tetrisの床に落とすイメージ）へ詰めることで、
+ *  浮いた隙間を作らない。縦横の向きは固定せず、空きへ最も無駄なくフィットする方を選ぶ。
  */
-function contactScore(t, m, x, y, w, h) {
-  const EPS = 1;
-  let score = 0;
-  if (x <= EPS) score++;                          // 前壁（運転席側）に接する
-  if (y <= EPS) score++;                          // 側壁に接する
-  if (x + w >= m.cargoLength - EPS) score++;      // 後壁に接する
-  if (y + h >= m.cargoWidth - EPS) score++;       // 反対側の側壁に接する
-  state.placements.forEach(p => {
-    if (p.truckInstanceId !== t.instanceId) return;
-    const r = boxRect(p);
-    const xTouch = Math.abs(r.x + r.w - x) <= EPS || Math.abs(x + w - r.x) <= EPS;
-    const yOverlap = y < r.y + r.h && y + h > r.y;
-    if (xTouch && yOverlap) score++;              // 前後の既存商品に接する
-    const yTouch = Math.abs(r.y + r.h - y) <= EPS || Math.abs(y + h - r.y) <= EPS;
-    const xOverlap = x < r.x + r.w && x + w > r.x;
-    if (yTouch && xOverlap) score++;              // 左右の既存商品に接する
+
+/** rectA から rectB（占有領域）を差し引いた残りの長方形群を返す（ギロチン分割） */
+function subtractRect(freeRect, occ) {
+  if (!rectsOverlap(freeRect, occ)) return [freeRect];
+  const out = [];
+  if (occ.x > freeRect.x) out.push({ x: freeRect.x, y: freeRect.y, w: occ.x - freeRect.x, h: freeRect.h });
+  if (occ.x + occ.w < freeRect.x + freeRect.w) out.push({ x: occ.x + occ.w, y: freeRect.y, w: (freeRect.x + freeRect.w) - (occ.x + occ.w), h: freeRect.h });
+  if (occ.y > freeRect.y) out.push({ x: freeRect.x, y: freeRect.y, w: freeRect.w, h: occ.y - freeRect.y });
+  if (occ.y + occ.h < freeRect.y + freeRect.h) out.push({ x: freeRect.x, y: occ.y + occ.h, w: freeRect.w, h: (freeRect.y + freeRect.h) - (occ.y + occ.h) });
+  return out.filter(r => r.w > 0.5 && r.h > 0.5);
+}
+
+/** 他の長方形に完全に含まれる長方形を除去する（重複した空き領域の整理） */
+function pruneContainedRects(rects) {
+  return rects.filter((a, i) => !rects.some((b, j) => i !== j &&
+    a.x >= b.x - 0.5 && a.y >= b.y - 0.5 &&
+    a.x + a.w <= b.x + b.w + 0.5 && a.y + a.h <= b.y + b.h + 0.5 &&
+    (a.w * a.h < b.w * b.h || (a.w * a.h === b.w * b.h && i > j))));
+}
+
+/** そのトラックの現在の空き長方形群を、既存の配置を差し引いて算出する */
+function computeFreeRects(t, m) {
+  let free = [{ x: 0, y: 0, w: m.cargoLength, h: m.cargoWidth }];
+  state.placements.filter(p => p.truckInstanceId === t.instanceId).forEach(p => {
+    const occ = boxRect(p);
+    let next = [];
+    free.forEach(r => next.push(...subtractRect(r, occ)));
+    free = pruneContainedRects(next);
   });
-  return score;
+  return free;
+}
+
+/**
+ * 空き長方形群の中から、商品(0°/90°)が収まる最も無駄の少ない置き場所を選ぶ
+ * （Best Short Side Fit：はみ出した余白の短辺が最小＝最もフィットする空きを優先）。
+ * 同点なら前方(小x)・左(小y)を優先し、前方の空きから順に詰まっていくようにする。
+ */
+function bestFreeRectFit(freeRects, fp0, fp90) {
+  let best = null;
+  freeRects.forEach(r => {
+    [[fp0, 0], [fp90, 90]].forEach(([fp, rot]) => {
+      if (fp.lenX > r.w + 0.5 || fp.lenY > r.h + 0.5) return;
+      const shortSide = Math.min(r.w - fp.lenX, r.h - fp.lenY);
+      if (!best || shortSide < best.shortSide - 0.5 ||
+          (Math.abs(shortSide - best.shortSide) <= 0.5 && (r.x < best.x - 0.5 || (Math.abs(r.x - best.x) <= 0.5 && r.y < best.y)))) {
+        best = { x: r.x, y: r.y, rot, fp, shortSide };
+      }
+    });
+  });
+  return best;
 }
 
 /* -------- 配置不可トースト -------- */
@@ -797,9 +831,9 @@ function flashNoStock(code) {
  *  phase1: 高さ(H)降順にソート（同高はフットプリント大きい順）
  *          → 高い商品を先に処理することで、高さが近い商品同士が処理順的に隣接しやすくなる
  *  phase2〜4: トラックは前方から埋める（先頭トラックが埋まるまで次のトラックへ進まない）。
- *          各トラック内では、縦横の向きを固定せず、壁・既存商品への接触度スコアが
- *          最も高い位置と向きを機械的に選ぶ（＝デッドスペースを作らないことを最優先）。
- *          縦置き・横置きどちらが良いかは決め打ちしない。
+ *          各トラック内では、空き長方形（computeFreeRects）の中から商品が最もフィットする
+ *          ものを選び、その空き領域の前方・左端（Tetrisの床に落とすイメージ）へ詰める。
+ *          縦置き・横置きは決め打ちせず、隙間なく収まる向きを機械的に選ぶ。
  *  phase5: 二段積み可能品（C6等）は新規フットプリントを使わず、前方の既存プレースへ積み増す
  *          （＝隙間を作らず上段へ乗せる。§CENTER-003）
  *
@@ -814,7 +848,6 @@ function placeUnits(units) {
     return (ib.height - ia.height) || (ib.width * ib.depth - ia.width * ia.depth);
   });
 
-  const STEP = 50;
   let placed = 0, failed = 0;
 
   units.forEach(code => {
@@ -826,28 +859,16 @@ function placeUnits(units) {
       if (target) { target.stack = (target.stack || 1) + 1; placed++; return; }
     }
 
-    // phase2〜4: トラックを前方（先頭）から順に試し、そのトラック内で
-    //            接触度スコア最大の(x, y, 向き)を選ぶ＝隙間を残さない配置を優先
+    // phase2〜4: トラックを前方（先頭）から順に試し、そのトラックの空き長方形の中から
+    //            最もフィットする場所へ詰める（＝隙間を残さない配置を優先）
     const fp0 = footprint(info, 0);
     const fp90 = footprint(info, 90);
-    const minLenX = Math.min(fp0.lenX, fp90.lenX);
-    const minLenY = Math.min(fp0.lenY, fp90.lenY);
     let placedHere = false;
 
     for (const t of state.trucks) {
       const m = truckDims(t);
-      let best = null;   // { x, y, rot, fp, score }
-
-      for (let x = 0; x + minLenX <= m.cargoLength; x += STEP) {
-        for (let y = 0; y + minLenY <= m.cargoWidth; y += STEP) {
-          for (const [fp, rot] of [[fp0, 0], [fp90, 90]]) {
-            if (x + fp.lenX > m.cargoLength || y + fp.lenY > m.cargoWidth) continue;
-            if (collides(t.instanceId, { x, y, w: fp.lenX, h: fp.lenY })) continue;
-            const score = contactScore(t, m, x, y, fp.lenX, fp.lenY);
-            if (!best || score > best.score) best = { x, y, rot, fp, score };
-          }
-        }
-      }
+      const free = computeFreeRects(t, m);
+      const best = bestFreeRectFit(free, fp0, fp90);
 
       if (best) {
         state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
