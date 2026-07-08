@@ -614,6 +614,7 @@ function renderCanvases() {
         <span class="tb-actions">
           <button class="tb-btn ${mode === 'top' ? 'is-on' : ''}" data-view="top">上面図</button>
           <button class="tb-btn ${mode === 'side' ? 'is-on' : ''}" data-view="side">側面図</button>
+          <button class="tb-btn" data-relayout="1" ${hasPlace ? '' : 'disabled'}>再配置</button>
           <button class="tb-btn tb-clear" data-clear="1" ${hasPlace ? '' : 'disabled'}>配置消去</button>
           <button class="tb-btn tb-del" data-del="1">削除</button>
         </span>
@@ -639,6 +640,7 @@ function renderCanvases() {
 
     block.querySelector('[data-view="top"]').addEventListener('click', () => { t.viewMode = 'top'; renderCanvases(); });
     block.querySelector('[data-view="side"]').addEventListener('click', () => { t.viewMode = 'side'; renderCanvases(); });
+    block.querySelector('[data-relayout="1"]').addEventListener('click', () => openRelayoutModal(t.instanceId));
     block.querySelector('[data-clear="1"]').addEventListener('click', () => clearTruckPlacements(t.instanceId));
     block.querySelector('[data-del="1"]').addEventListener('click', () => removeTruck(t.instanceId));
 
@@ -937,20 +939,25 @@ function pruneContainedRects(rects) {
     (a.w * a.h < b.w * b.h || (a.w * a.h === b.w * b.h && i > j))));
 }
 
-/**
- * そのトラックの現在の空き長方形群を、既存の配置を差し引いて算出する。
- * extraLen/extraWid を指定すると、荷台の実サイズより広い仮想領域で計算する
- * （②自動配置改善：本来のスペースでは入らない商品を、はみ出し許容で置くためのフォールバック用）。
- */
-function computeFreeRects(t, m, extraLen = 0, extraWid = 0) {
+/** placements配列（stateとは限らない任意の配置リスト）から空き長方形群を算出する共通処理 */
+function computeFreeRectsFromList(placements, m, extraLen = 0, extraWid = 0) {
   let free = [{ x: 0, y: 0, w: m.cargoLength + extraLen, h: m.cargoWidth + extraWid }];
-  state.placements.filter(p => p.truckInstanceId === t.instanceId).forEach(p => {
+  placements.forEach(p => {
     const occ = boxRect(p);
     let next = [];
     free.forEach(r => next.push(...subtractRect(r, occ)));
     free = pruneContainedRects(next);
   });
   return free;
+}
+
+/**
+ * そのトラックの現在の空き長方形群を、既存の配置を差し引いて算出する。
+ * extraLen/extraWid を指定すると、荷台の実サイズより広い仮想領域で計算する
+ * （②自動配置改善：本来のスペースでは入らない商品を、はみ出し許容で置くためのフォールバック用）。
+ */
+function computeFreeRects(t, m, extraLen = 0, extraWid = 0) {
+  return computeFreeRectsFromList(state.placements.filter(p => p.truckInstanceId === t.instanceId), m, extraLen, extraWid);
 }
 
 /**
@@ -973,6 +980,30 @@ function bestFreeRectFit(freeRects, fp0, fp90) {
     if (!best || bestForRect.shortSide < best.shortSide - 0.5 ||
         (Math.abs(bestForRect.shortSide - best.shortSide) <= 0.5 && r.x < best.x - 0.5) ||
         (Math.abs(bestForRect.shortSide - best.shortSide) <= 0.5 && Math.abs(r.x - best.x) <= 0.5 && r.y < best.y - 0.5)) {
+      best = { x: r.x, y: r.y, rot: bestForRect.rot, fp: bestForRect.fp, shortSide: bestForRect.shortSide };
+    }
+  });
+  return best;
+}
+
+/**
+ * bestFreeRectFitの「前方優先」版（再配置の比較案で使用）。
+ * 優先順位: ① 前方(小x) → ② 前面(小y) → ③ 最もフィットする向き。
+ * 積載効率よりも、前から順に詰まっていく見やすさを優先する（Ver.2以前の既定ロジック）。
+ */
+function bestFreeRectFitFront(freeRects, fp0, fp90) {
+  let best = null;
+  freeRects.forEach(r => {
+    let bestForRect = null;
+    [[fp0, 0], [fp90, 90]].forEach(([fp, rot]) => {
+      if (fp.lenX > r.w + 0.5 || fp.lenY > r.h + 0.5) return;
+      const shortSide = Math.min(r.w - fp.lenX, r.h - fp.lenY);
+      if (!bestForRect || shortSide < bestForRect.shortSide) bestForRect = { rot, fp, shortSide };
+    });
+    if (!bestForRect) return;
+    if (!best || r.x < best.x - 0.5 ||
+        (Math.abs(r.x - best.x) <= 0.5 && r.y < best.y - 0.5) ||
+        (Math.abs(r.x - best.x) <= 0.5 && Math.abs(r.y - best.y) <= 0.5 && bestForRect.shortSide < best.shortSide)) {
       best = { x: r.x, y: r.y, rot: bestForRect.rot, fp: bestForRect.fp, shortSide: bestForRect.shortSide };
     }
   });
@@ -1213,6 +1244,153 @@ function showResidualWarning(r) {
   mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
   mask.querySelector('[data-ok]').addEventListener('click', close);
   document.body.appendChild(mask);
+}
+
+/* ---------------------------------------------------------------------------
+ * 再配置（複数案の比較・選択）
+ *   現在そのトラックに積まれている商品構成はそのまま保ち、異なるロジックで
+ *   組み直した候補案を2〜3種類生成し、ミニプレビューを見比べて選べるようにする。
+ * ------------------------------------------------------------------------- */
+/** truckInstanceId に現在積まれている商品を、品番の配列（stackはユニットに展開）で返す */
+function unitsFromTruckPlacements(truckInstanceId) {
+  const units = [];
+  state.placements.filter(p => p.truckInstanceId === truckInstanceId).forEach(p => {
+    for (let i = 0; i < (p.stack || 1); i++) units.push(p.code);
+  });
+  return units;
+}
+
+/**
+ * units を、指定した並び順(sortFn)・フィット関数(fitFn)で1つの案として組み直す。
+ * 実際のstateには一切触れず、仮の配置リストを返すだけ（比較用プレビュー生成のため）。
+ */
+function buildLayoutCandidate(units, m, sortFn, fitFn) {
+  const ordered = [...units].sort(sortFn);
+  const placements = [];
+  let failed = 0;
+  ordered.forEach(code => {
+    const info = productInfo(code);
+    if (canStack(info)) {
+      let stackTarget = null;
+      placements.forEach(p => {
+        if (p.code === code && (p.stack || 1) < (info.maxStack || 1)) {
+          if (!stackTarget || p.x < stackTarget.x) stackTarget = p;
+        }
+      });
+      if (stackTarget) { stackTarget.stack = (stackTarget.stack || 1) + 1; return; }
+    }
+    const fp0 = footprint(info, 0), fp90 = footprint(info, 90);
+    const free = computeFreeRectsFromList(placements, m);
+    const best = fitFn(free, fp0, fp90);
+    if (best) {
+      placements.push({ id: uid('cand'), code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
+    } else {
+      failed++;
+    }
+  });
+  return { placements, failed };
+}
+
+const RELAYOUT_STRATEGIES = [
+  {
+    label: '積載効率優先（現在の既定）',
+    desc: '空きスペースを最も無駄なく埋める配置。積める量を最大化する。',
+    sortFn: (a, b) => { const ia = productInfo(a), ib = productInfo(b); return (ib.height - ia.height) || (ib.width * ib.depth - ia.width * ia.depth); },
+    fitFn: bestFreeRectFit,
+  },
+  {
+    label: '前方優先・見やすさ重視',
+    desc: '前から順に詰め、荷下ろし順や見た目の分かりやすさを優先する。',
+    sortFn: (a, b) => { const ia = productInfo(a), ib = productInfo(b); return (ib.height - ia.height) || (ib.width * ib.depth - ia.width * ia.depth); },
+    fitFn: bestFreeRectFitFront,
+  },
+  {
+    label: '同一商品をまとめて配置',
+    desc: '同じ品番の商品同士が近くにまとまるよう、品番ごとに続けて詰める。',
+    sortFn: (a, b) => a.localeCompare(b) || 0,
+    fitFn: bestFreeRectFitFront,
+  },
+];
+
+function fillRatioOf(placements, m) {
+  const area = placements.reduce((sum, p) => { const fp = footprint(productInfo(p.code), p.rotation); return sum + fp.lenX * fp.lenY; }, 0);
+  return area / (m.cargoLength * m.cargoWidth);
+}
+
+/** 再配置モーダルを開き、複数の候補案をミニプレビューで比較・選択できるようにする */
+function openRelayoutModal(truckInstanceId) {
+  const t = state.trucks.find(x => x.instanceId === truckInstanceId);
+  if (!t) return;
+  const m = truckDims(t);
+  const units = unitsFromTruckPlacements(truckInstanceId);
+  if (units.length === 0) { toast('この荷台には商品がありません'); return; }
+
+  const candidates = RELAYOUT_STRATEGIES.map(strategy => ({
+    ...strategy,
+    result: buildLayoutCandidate(units, m, strategy.sortFn, strategy.fitFn),
+  }));
+
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  const cardsHtml = candidates.map((c, i) => {
+    const fillPct = Math.round(fillRatioOf(c.result.placements, m) * 100);
+    return `
+      <div class="relayout-card">
+        <div class="relayout-preview" data-cand="${i}"></div>
+        <div class="relayout-info">
+          <div class="relayout-label">${c.label}</div>
+          <div class="relayout-desc">${c.desc}</div>
+          <div class="relayout-stats">積載率目安 ${fillPct}%${c.result.failed > 0 ? `／積み残し ${c.result.failed}個` : ''}</div>
+          <button class="btn btn-primary relayout-apply" data-cand="${i}">この案を適用</button>
+        </div>
+      </div>`;
+  }).join('');
+  mask.innerHTML = `
+    <div class="modal relayout-modal">
+      <h3>再配置案を選択</h3>
+      <p class="modal-message">現在この荷台に積まれている商品を、異なるロジックで組み直しました。気に入った案を選んでください。</p>
+      <div class="relayout-cards">${cardsHtml}</div>
+      <div class="modal-actions">
+        <button class="btn" data-cancel>キャンセル</button>
+      </div>
+    </div>`;
+  const close = () => mask.remove();
+  mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+  mask.querySelector('[data-cancel]').addEventListener('click', close);
+  mask.querySelectorAll('.relayout-apply').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cand = candidates[parseInt(btn.dataset.cand, 10)];
+      state.placements = state.placements.filter(p => p.truckInstanceId !== truckInstanceId)
+        .concat(cand.result.placements.map(p => ({ ...p, id: uid('p'), truckInstanceId })));
+      renderProductList();
+      renderCanvases();
+      saveToLocal();
+      close();
+      if (cand.result.failed > 0) toast(`一部の商品はこの案では積み切れませんでした（${cand.result.failed}個）`);
+      else toast('再配置しました');
+    });
+  });
+  document.body.appendChild(mask);
+
+  // ミニプレビュー描画（実キャンバスとは独立した簡易版）
+  candidates.forEach((c, i) => {
+    const host = mask.querySelector(`.relayout-preview[data-cand="${i}"]`);
+    const box = host.getBoundingClientRect();
+    const scale = Math.min((box.width || 260) / m.cargoLength, (box.height || 140) / m.cargoWidth);
+    c.result.placements.forEach(p => {
+      const info = productInfo(p.code);
+      const fp = footprint(info, p.rotation);
+      const el = document.createElement('div');
+      el.className = 'relayout-box';
+      el.style.left = (p.x * scale) + 'px';
+      el.style.top = (p.y * scale) + 'px';
+      el.style.width = (fp.lenX * scale) + 'px';
+      el.style.height = (fp.lenY * scale) + 'px';
+      el.style.borderColor = info.color;
+      el.style.background = hexToRgba(info.color, 0.25);
+      host.appendChild(el);
+    });
+  });
 }
 
 /** 全体を自動配置（残数ぶん） */
