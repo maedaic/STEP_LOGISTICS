@@ -433,39 +433,31 @@ function layoutCargo(block, truckInstance, mode) {
   // 目盛・グリッドは廃止（CENTER-005）: 荷台はシンプル表示
 
   // 商品配置
-  state.placements
-    .filter(p => p.truckInstanceId === truckInstance.instanceId)
-    .forEach(p => cargo.appendChild(buildPlacementEl(p, m, mode, scale)));
+  const placements = state.placements.filter(p => p.truckInstanceId === truckInstance.instanceId);
+  if (mode === 'side') {
+    renderSideView(cargo, placements, m, scale);          // CENTER-009: 専用の側面図描画
+  } else {
+    placements.forEach(p => cargo.appendChild(buildPlacementEl(p, m, scale)));
+  }
 
   // 配置操作（クリック配置 / ドロップ / ドラッグ移動）
   attachCargoHandlers(cargo, truckInstance, m);
 }
 
-/** 1つの配置商品DOMを作る（画面・印刷共用の見た目） */
-function buildPlacementEl(p, truck, mode, scale) {
+/** 1つの配置商品DOM（上面図）を作る */
+function buildPlacementEl(p, truck, scale) {
   const info = productInfo(p.code);
   const fp = footprint(info, p.rotation);
   const el = document.createElement('div');
   el.className = 'placement' + (selectedPid === p.id ? ' is-selected' : '');
   el.dataset.pid = p.id;
 
-  let wpx, hpx, leftpx, toppx;
-  if (mode === 'side') {
-    // 側面図: 横=長さ方向のフット, 縦=商品高さ。底面に接地。
-    wpx = fp.lenX * scale;
-    hpx = info.height * scale;
-    leftpx = p.x * scale;
-    toppx = (truck.cargoHeight - info.height) * scale;
-  } else {
-    wpx = fp.lenX * scale;
-    hpx = fp.lenY * scale;
-    leftpx = p.x * scale;
-    toppx = p.y * scale;
-  }
+  const wpx = fp.lenX * scale;
+  const hpx = fp.lenY * scale;
   el.style.width = wpx + 'px';
   el.style.height = hpx + 'px';
-  el.style.left = leftpx + 'px';
-  el.style.top = toppx + 'px';
+  el.style.left = (p.x * scale) + 'px';
+  el.style.top = (p.y * scale) + 'px';
   el.style.borderColor = info.color;
   el.style.background = hexToRgba(info.color, 0.10);
   el.style.color = info.color;
@@ -475,6 +467,60 @@ function buildPlacementEl(p, truck, mode, scale) {
     <span class="p-remove" title="配置を取り消す">×</span>
     <span class="p-code">${p.code}</span>
     <span class="p-size">${fp.lenX}×${fp.lenY}</span>`;
+  return el;
+}
+
+/**
+ * 側面図の描画（CENTER-009）
+ *  ・側面図は幅(Y)方向を表現できないため、同じ長さ位置(x)に幅違いで複数置かれた商品は
+ *    そのまま描くと同一座標へ重なって見える（＝重複表示の不具合）。
+ *    同一の長さ位置・品番・向きでグルーピングし、重複描画を防ぐ。
+ *  ・グループ内の段数は「最大値」を使う（＝合算しない）。横に並ぶ別々の配置は
+ *    物理的に積み上がっているわけではないため、合算すると実際より高く描画され
+ *    荷台からはみ出してしまう。側面から見える高さは「その位置で一番高いもの」。
+ *  ・二段積み（stack）は「上段へ表示・下段上段を明確に分離」するため、
+ *    段数ぶんのブロックを実際の積載高さで下から上へ積み重ねて描く。
+ */
+function renderSideView(cargo, placements, truck, scale) {
+  const groups = new Map();
+  placements.forEach(p => {
+    const fp = footprint(productInfo(p.code), p.rotation);
+    const bucket = Math.round(p.x / 50) * 50;   // 自動配置のSTEP(50mm)に合わせて束ねる
+    const key = `${p.code}_${p.rotation}_${bucket}`;
+    if (!groups.has(key)) groups.set(key, { code: p.code, x: bucket, lenX: fp.lenX, ids: [], stackCount: 0 });
+    const g = groups.get(key);
+    g.ids.push(p.id);
+    g.stackCount = Math.max(g.stackCount, p.stack || 1);   // 合算ではなく最大値（実際の積載高さ）
+  });
+  groups.forEach(g => cargo.appendChild(buildSidePlacementEl(g, truck, scale)));
+}
+
+/** 側面図：1グループ（同一長さ位置・品番）を段数ぶん積み重ねたDOMを作る */
+function buildSidePlacementEl(g, truck, scale) {
+  const info = productInfo(g.code);
+  const el = document.createElement('div');
+  const isSelected = selectedPid && g.ids.includes(selectedPid);
+  el.className = 'placement placement-stack' + (isSelected ? ' is-selected' : '');
+  el.dataset.pid = g.ids[0];
+
+  const wpx = g.lenX * scale;
+  const tierPx = info.height * scale;
+  const totalPx = tierPx * g.stackCount;
+  el.style.width = wpx + 'px';
+  el.style.height = totalPx + 'px';
+  el.style.left = (g.x * scale) + 'px';
+  el.style.top = (truck.cargoHeight * scale - totalPx) + 'px';   // 底面に接地
+  el.style.color = info.color;
+
+  // 上段から順にDOMへ追加＝flex縦積みで視覚的にも上段が上に来る（下段・上段を明確に分離）
+  let tiers = '';
+  for (let i = g.stackCount - 1; i >= 0; i--) {
+    tiers += `<div class="placement-tier" style="height:${tierPx}px;border-color:${info.color};background:${hexToRgba(info.color, 0.10)}">
+      <span class="p-code">${g.code}</span>
+      <span class="p-size">${g.stackCount > 1 ? (i + 1) + '段目' : g.lenX + '×' + info.height}</span>
+    </div>`;
+  }
+  el.innerHTML = `<span class="p-remove" title="配置を取り消す">×</span>${tiers}`;
   return el;
 }
 
@@ -697,16 +743,23 @@ function flashNoStock(code) {
  *  既存の手動配置は残したまま、空きスペースへ積み増す。
  * ------------------------------------------------------------------------- */
 /**
- * 配置コア（CENTER-004）
- *  ・高さ(H)が高い商品から配置
- *  ・前方(荷台の x=0 側=運転席側)から順に、前方スペースを優先して埋める
- *  ・C6等の二段積み可能品は既存の同一品番へ積み増して隙間を最小化（CENTER-003）
+ * 配置コア（CENTER-004 / AUTO-001 / AUTO-002）— フェーズ構成は仕様の algorithm セクションに対応
+ *
+ *  phase1: 高さ(H)降順にソート（同高はフットプリント大きい順）
+ *          → 高い商品を先に処理することで、高さが近い商品同士が処理順的に隣接しやすくなる
+ *  phase2: 前方(荷台の x=0 側=運転席側)から順に走査。x昇順→y昇順の完全ラスタ探索のため、
+ *          常に (0,0) 側から調べ直す＝前面を隙間なく埋め、新しい列（大きいx）は最後に使う
+ *  phase3/4: 各候補セルで 0°/90° の両方を試し、隙間にフィットする向きを優先
+ *          （既存スペースの探索を尽くしてから新しい列に進む。小型商品もこの走査で自然に隙間へ収まる）
+ *  phase5: 二段積み可能品（C6等）は新規フットプリントを使わず、前方の既存プレースへ積み増す
+ *          （＝隙間を作らず上段へ乗せる。§CENTER-003）
+ *
  * units: 積む品番の配列（呼び出し側が在庫内に収める）
  */
 function placeUnits(units) {
   if (state.trucks.length === 0) { toast('先にトラックを選択してください'); return { placed: 0, failed: 0, noTruck: true }; }
 
-  // 高さ降順 → 同高はフットプリント大きい順
+  // phase1: 高さ降順 → 同高はフットプリント大きい順
   units.sort((a, b) => {
     const ia = productInfo(a), ib = productInfo(b);
     return (ib.height - ia.height) || (ib.width * ib.depth - ia.width * ia.depth);
@@ -718,22 +771,29 @@ function placeUnits(units) {
   units.forEach(code => {
     const info = productInfo(code);
 
-    // まず二段積み: 前方にある同一品番へ積み増す
+    // phase5: 二段積み可能品は前方の既存プレースへ積み増す（新しい床面積を使わない）
     if (canStack(info)) {
       const target = frontmostStackable(code, info.maxStack || 1);
       if (target) { target.stack = (target.stack || 1) + 1; placed++; return; }
     }
 
-    // 新規配置: 前方(小x)優先で空きを探す（x外ループ→前方から埋まる）
-    const fp = footprint(info, 0);
+    // phase2+3+4: 前方(小x)→幅(小y)の順にラスタ走査。各セルで0°/90°を試し、
+    //             隙間にフィットする向きがあれば新しい列を作る前にそこを使う
+    const fp0 = footprint(info, 0);
+    const fp90 = footprint(info, 90);
+    const minLenX = Math.min(fp0.lenX, fp90.lenX);
+    const minLenY = Math.min(fp0.lenY, fp90.lenY);
     let done = false;
     for (const t of state.trucks) {
       const m = truckDims(t);
-      for (let x = 0; x + fp.lenX <= m.cargoLength && !done; x += STEP) {
-        for (let y = 0; y + fp.lenY <= m.cargoWidth && !done; y += STEP) {
-          if (!collides(t.instanceId, { x, y, w: fp.lenX, h: fp.lenY })) {
-            state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(x), y: Math.round(y), rotation: 0, stack: 1 });
-            placed++; done = true;
+      for (let x = 0; x + minLenX <= m.cargoLength && !done; x += STEP) {
+        for (let y = 0; y + minLenY <= m.cargoWidth && !done; y += STEP) {
+          for (const [fp, rot] of [[fp0, 0], [fp90, 90]]) {
+            if (x + fp.lenX > m.cargoLength || y + fp.lenY > m.cargoWidth) continue;
+            if (!collides(t.instanceId, { x, y, w: fp.lenX, h: fp.lenY })) {
+              state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(x), y: Math.round(y), rotation: rot, stack: 1 });
+              placed++; done = true; break;
+            }
           }
         }
       }
@@ -904,11 +964,16 @@ function addProductManual() {
       if (it) it.qty += qty; else s.items.push({ code, qty });
     }
   } else {
-    // 手入力グループへ。マスター外は仮サイズのdefを持たせる
-    const master = getProductMaster(code);
-    const def = master ? null : { name: code, width: 400, depth: 400, height: 400, color: pickColor(state.products.length) };
-    if (!master) toast(`「${code}」はマスター未登録のため仮サイズ(400)で追加しました`);
-    state.manual.push({ id: uid('m'), code, qty, def });
+    // 手入力グループへ。同一品番は既存行へ加算し、行が重複しないようにする
+    const exist = state.manual.find(x => x.code === code);
+    if (exist) {
+      exist.qty += qty;
+    } else {
+      const master = getProductMaster(code);
+      const def = master ? null : { name: code, width: 400, depth: 400, height: 400, color: pickColor(state.products.length) };
+      if (!master) toast(`「${code}」はマスター未登録のため仮サイズ(400)で追加しました`);
+      state.manual.push({ id: uid('m'), code, qty, def });
+    }
   }
 
   rebuildProducts();
@@ -931,11 +996,20 @@ function renderManualSlipOptions() {
   if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
-/* 全消去（TOP-002）: 現在の配置だけ初期化。OCR結果・伝票・トラックは保持 */
+/* 全消去（TOP-003）: トラック配置・OCR結果・伝票・手入力商品を全て削除し、画面を初期状態へ戻す */
 function clearAllPlacements() {
-  if (state.placements.length === 0) { toast('配置はありません'); return; }
-  if (!confirm('現在の配置をすべて消去しますか？\n（伝票・商品・トラックは残り、積載レイアウトのみ初期化します）')) return;
+  const isEmpty = state.trucks.length === 0 && state.slips.length === 0 &&
+    state.manual.length === 0 && state.placements.length === 0;
+  if (isEmpty) { toast('削除するデータがありません'); return; }
+  if (!confirm('全て削除しますか？\nトラック配置・OCR結果・伝票・手入力商品を全て削除します。この操作は元に戻せません。')) return;
+
+  state.slips.forEach(s => { if (s.thumbUrl) { try { URL.revokeObjectURL(s.thumbUrl); } catch (_) {} } });
+  state.trucks = [];
+  state.slips = [];
+  state.manual = [];
+  state.products = [];
   state.placements = [];
+  pickedCode = null;
   selectedPid = null;
   renderAll();
 }

@@ -311,6 +311,18 @@ input, textarea { font-family: inherit; }
 /* 当たり判定: 重なる位置は赤枠で配置不可を明示 */
 .placement.collide { border-color: #dc2626 !important; background: rgba(220,38,38,.14) !important; color: #dc2626 !important; }
 
+/* 側面図：段積み表示（CENTER-009）。外枠は透明にし、各段(.placement-tier)で境界を表現 */
+.placement.placement-stack {
+  border: none; background: transparent; border-radius: 0; padding: 0;
+  flex-direction: column; justify-content: flex-start;
+}
+.placement-tier {
+  width: 100%; box-sizing: border-box; border: 1.5px solid; border-radius: 3px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  overflow: hidden; flex: none;
+}
+.placement.placement-stack .p-remove { top: 1px; right: 3px; z-index: 2; color: var(--text); }
+
 /* 配置不可トースト */
 .toast {
   position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%);
