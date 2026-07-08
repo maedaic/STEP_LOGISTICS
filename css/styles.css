@@ -1,0 +1,419 @@
+/* =========================================================================
+ * styles.css — 配送レイアウトシステム
+ * 方針: 見やすい / 分かりやすい / 紙より速い / 教育不要
+ * ======================================================================= */
+
+:root {
+  --bg:        #eef0f3;
+  --panel:     #ffffff;
+  --line:      #e2e5ea;
+  --line-2:    #eceef2;
+  --text:      #1f2430;
+  --text-sub:  #6b7280;
+  --text-mut:  #9aa1ac;
+  --blue:      #1e6fe0;
+  --blue-d:    #175bc0;
+  --blue-l:    #eaf1fd;
+  --green:     #16a34a;
+  --amber:     #d97706;
+  --radius:    10px;
+  --shadow:    0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.05);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI",
+               "Meiryo", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+button { font-family: inherit; cursor: pointer; }
+input, textarea { font-family: inherit; }
+
+/* ---------------- ボタン共通 ---------------- */
+.btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background .12s, border-color .12s;
+}
+.btn:hover { background: #f5f6f8; }
+.btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btn-primary:hover { background: var(--blue-d); }
+.btn-ghost { border-color: var(--line); background: #fff; color: var(--text-sub); }
+
+/* ---------------- ヘッダー ---------------- */
+.topbar {
+  display: flex; align-items: center; gap: 24px;
+  background: var(--panel);
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-logo {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--blue);
+  display: inline-block;
+}
+.brand-name { font-size: 18px; font-weight: 800; letter-spacing: .2px; }
+.brand-sub { color: var(--text-sub); font-size: 14px; }
+.topbar-project { flex: 1; color: var(--text-sub); font-size: 14px; display: flex; align-items: center; }
+.project-input {
+  border: 1px solid transparent; background: transparent;
+  font-size: 14px; color: var(--text); font-weight: 600;
+  padding: 4px 8px; border-radius: 6px; min-width: 320px;
+}
+.project-input:hover { background: #f5f6f8; }
+.project-input:focus { outline: none; border-color: var(--blue); background: #fff; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.autosave { display: flex; align-items: center; gap: 8px; margin-right: 4px; }
+.autosave-status { font-size: 11px; color: var(--text-mut); max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------------- ステップバー ---------------- */
+.stepbar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--panel);
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.steps { display: flex; align-items: center; gap: 20px; }
+.step {
+  border: none; background: transparent; color: var(--text-sub);
+  font-size: 14px; font-weight: 600; padding: 8px 18px; border-radius: 999px;
+}
+.step:hover { color: var(--text); }
+.step.is-active { background: var(--blue); color: #fff; }
+
+/* ---------------- レイアウト3カラム ---------------- */
+.layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 268px;
+  gap: 16px;
+  padding: 16px 24px;
+  align-items: start;
+}
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.panel-left  { padding: 16px; }
+.panel-center{ padding: 16px; }
+.panel-right { padding: 16px; }
+
+.section-title { font-size: 13px; font-weight: 700; color: var(--text-sub); margin: 4px 0 10px; }
+
+/* ---------------- 伝票アップロード ---------------- */
+.upload-box {
+  border: 1.5px dashed #b7c6e6;
+  background: var(--blue-l);
+  border-radius: var(--radius);
+  padding: 16px; text-align: center; cursor: pointer;
+  margin-bottom: 18px;
+  transition: background .12s;
+}
+.upload-box:hover { background: #e0ebfb; }
+.upload-plus { color: var(--blue); font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+.upload-types { display: flex; gap: 8px; justify-content: center; margin-bottom: 8px; }
+.chip {
+  border: 1px solid #c5d3ee; background: #fff; color: var(--text-sub);
+  padding: 3px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
+}
+.upload-hint { color: var(--text-mut); font-size: 11px; }
+.upload-preview { margin-top: 10px; }
+.upload-preview img { max-width: 100%; border-radius: 6px; border: 1px solid var(--line); }
+.upload-filename { font-size: 11px; color: var(--text-sub); margin-top: 6px; word-break: break-all; }
+
+/* ---------------- トラックマスター一覧 ---------------- */
+.truck-master-list { display: flex; flex-direction: column; gap: 8px; }
+.truck-card {
+  display: flex; align-items: center; gap: 10px;
+  border: 1.5px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; background: #fff; text-align: left; width: 100%;
+  position: relative; transition: border-color .12s, background .12s;
+}
+.truck-card:hover { border-color: #c3d3ef; background: #fafbfe; }
+.truck-card.is-selected { border-color: var(--blue); background: #eef4fd; }
+.truck-card.is-external { background: #fdf3e7; border-color: #f0dcbf; }
+.truck-icon {
+  width: 40px; height: 30px; flex: none; color: var(--text-mut);
+  display: flex; align-items: center; justify-content: center;
+}
+.truck-card.is-selected .truck-icon { color: var(--blue); }
+.truck-info { flex: 1; min-width: 0; }
+.truck-name { font-weight: 700; font-size: 14px; }
+.truck-spec { font-size: 11px; color: var(--text-sub); }
+.truck-dims { font-size: 11px; color: var(--text-mut); }
+.truck-check {
+  width: 20px; height: 20px; border-radius: 50%; flex: none;
+  background: var(--blue); color: #fff; display: none;
+  align-items: center; justify-content: center; font-size: 12px;
+}
+.truck-card.is-selected .truck-check { display: flex; }
+.badge-ext {
+  position: absolute; top: 10px; right: 12px;
+  font-size: 10px; background: #f3e2c6; color: #9a6a1c;
+  padding: 1px 8px; border-radius: 5px; font-weight: 700;
+}
+.truck-later { font-size: 11px; color: var(--text-mut); }
+
+.add-truck-link, .add-product-link {
+  border: none; background: transparent; color: var(--blue);
+  font-size: 13px; font-weight: 600; padding: 12px 2px 2px; width: 100%; text-align: left;
+}
+.add-truck-link:hover, .add-product-link:hover { text-decoration: underline; }
+
+/* トラック一覧アコーディオン */
+.truck-accordion { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+.accordion-head {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  background: #f7f8fa; border: none; padding: 12px 14px; font-size: 14px; font-weight: 700; color: var(--text);
+}
+.accordion-head:hover { background: #eef1f5; }
+.acc-caret { font-size: 11px; color: var(--text-sub); transition: transform .12s; }
+.accordion-head[aria-expanded="true"] .acc-caret { transform: rotate(0deg); }
+.acc-title { flex: 1; text-align: left; }
+.acc-count { font-size: 12px; font-weight: 700; color: var(--blue); }
+.accordion-body { padding: 12px; border-top: 1px solid var(--line); }
+.accordion-body .truck-master-list { max-height: 420px; overflow-y: auto; }
+
+/* アップロード伝票サムネイル一覧 */
+#slipList { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+.slip-row {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: #fff;
+}
+.slip-thumb {
+  width: 44px; height: 44px; flex: none; border-radius: 6px; overflow: hidden;
+  background: #f1f3f6; display: flex; align-items: center; justify-content: center; font-size: 20px;
+}
+.slip-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.slip-info { flex: 1; min-width: 0; }
+.slip-label { font-size: 12px; font-weight: 700; }
+.slip-name { font-size: 11px; color: var(--text-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slip-items { font-size: 11px; color: var(--text-sub); }
+.slip-del { border: none; background: transparent; color: var(--text-mut); font-size: 12px; font-weight: 600; flex: none; }
+.slip-del:hover { color: #c0392b; }
+
+/* 手入力フォーム */
+.manual-box { margin-top: 16px; border-top: 1px solid var(--line-2); padding-top: 14px; }
+.manual-slip { margin-bottom: 8px; }
+.manual-slip select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px; background: #fff; }
+.manual-slip select:focus { outline: none; border-color: var(--blue); }
+.manual-row { display: flex; align-items: flex-end; gap: 8px; }
+.manual-field { flex: 1; min-width: 0; }
+.manual-field.manual-qty { flex: 0 0 64px; }
+.manual-field label { display: block; font-size: 11px; color: var(--text-sub); font-weight: 600; margin-bottom: 3px; }
+.manual-field input {
+  width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; font-size: 14px;
+}
+.manual-field input:focus { outline: none; border-color: var(--blue); }
+.manual-add { flex: none; padding: 8px 14px; }
+
+/* 「トラックへ積む」自動配置ボタン */
+.auto-place-btn { width: 100%; margin-top: 14px; padding: 12px; font-size: 14px; }
+
+/* ---------------- 中央：キャンバスヘッダ ---------------- */
+.center-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.center-title { font-size: 14px; font-weight: 700; color: var(--text-sub); }
+.center-toggles { display: flex; gap: 18px; }
+.toggle { font-size: 13px; color: var(--text-sub); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* ---------------- トラックキャンバスブロック ---------------- */
+.truck-block { border: 1px solid var(--line-2); border-radius: 10px; padding: 14px; margin-bottom: 16px; background:#fff; }
+.tb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.tb-tag { background: #eef4fd; color: var(--blue); font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 6px; }
+.tb-name { font-weight: 700; font-size: 15px; }
+.tb-payload { color: var(--text-mut); font-size: 12px; }
+.tb-actions { margin-left: auto; display: flex; gap: 6px; }
+.tb-btn {
+  border: 1px solid var(--line); background: #fff; color: var(--text-sub);
+  font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 7px;
+}
+.tb-btn.is-on { background: #eef4fd; border-color: #bcd2f4; color: var(--blue); }
+.tb-btn.tb-del { color: #c0392b; }
+.tb-btn.tb-del:hover { background: #fdecea; }
+.tb-btn.tb-clear { color: var(--amber); }
+.tb-btn.tb-clear:hover:not(:disabled) { background: #fdf3e7; }
+.tb-btn:disabled { opacity: .4; cursor: default; }
+.tb-dims { font-size: 12px; color: var(--text-sub); margin: 8px 0 4px; }
+.tb-dims b { color: var(--text); }
+.tb-est { color: var(--amber); font-size: 11px; margin-left: 6px; }
+
+/* ---------------- 進行方向の注記 ---------------- */
+.dir-note { font-size: 11px; color: var(--text-sub); margin: 2px 0 6px; font-weight: 600; }
+
+/* ---------------- キャンバス本体 ---------------- */
+.canvas-wrap { position: relative; padding-left: 48px; padding-top: 18px; }
+.ruler-x {
+  position: absolute; top: 0; left: 48px; right: 0; height: 16px;
+  color: var(--blue); font-size: 10px;
+}
+.ruler-x .tick { position: absolute; top: 0; transform: translateX(-50%); }
+.ruler-x .tick-end { color: var(--blue); font-weight: 700; }
+.ruler-y { display: none; }  /* 幅はヘッダのWで表記するため非表示 */
+.cargo {
+  position: relative; border: 2px solid #cfd6e0; border-radius: 4px;
+  background: #fff; overflow: hidden;
+}
+.cargo.grid-on {
+  background-image:
+    linear-gradient(to right, #eef1f5 1px, transparent 1px),
+    linear-gradient(to bottom, #eef1f5 1px, transparent 1px);
+}
+.cargo.drop-hint { outline: 2px dashed var(--blue); outline-offset: -4px; }
+
+/* トラック前方（運転席）キャビン表現。左＝前方＝進行方向（CENTER-001） */
+.truck-cab {
+  position: absolute; left: 6px; top: 18px; bottom: 0; width: 36px;
+  background: linear-gradient(90deg, #c3ccd9, #d7dde6);
+  border: 1.5px solid #aeb8c6;
+  border-radius: 12px 3px 3px 12px;   /* 左（前）を丸めてノーズ感 */
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  box-shadow: inset 2px 0 0 rgba(255,255,255,.5);
+}
+.cab-glass {
+  width: 22px; height: 14px; background: #dbe8fb;
+  border: 1px solid #9fb4d6; border-radius: 2px;
+}
+.cab-label { font-size: 12px; font-weight: 800; color: #4a5566; letter-spacing: 1px; }
+
+.placement {
+  position: absolute; box-sizing: border-box;
+  border: 1.5px solid; border-radius: 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; cursor: grab; user-select: none;
+  overflow: hidden;
+}
+.placement:active { cursor: grabbing; }
+.placement.dragging { z-index: 20; box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+.placement .p-code { font-size: 13px; font-weight: 800; line-height: 1.1; }
+.placement .p-size { font-size: 9px; font-weight: 600; opacity: .8; }
+.placement .p-dots { position: absolute; top: 3px; left: 4px; font-size: 8px; letter-spacing: 1px; opacity: .7; }
+.placement .p-remove {
+  position: absolute; top: 1px; right: 3px; font-size: 12px; line-height: 1;
+  color: inherit; opacity: 0; cursor: pointer;
+}
+.placement:hover .p-remove { opacity: .7; }
+.placement.out-of-bounds { border-style: dashed; }
+/* 選択中（Deleteキー対象）CENTER-008 */
+.placement.is-selected { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--blue); z-index: 15; }
+/* 二段積みバッジ CENTER-003 */
+.placement .p-stack {
+  position: absolute; top: 2px; left: 3px; font-size: 9px; font-weight: 800;
+  background: rgba(0,0,0,.10); color: inherit; border-radius: 3px; padding: 0 4px; line-height: 1.4;
+}
+/* 当たり判定: 重なる位置は赤枠で配置不可を明示 */
+.placement.collide { border-color: #dc2626 !important; background: rgba(220,38,38,.14) !important; color: #dc2626 !important; }
+
+/* 配置不可トースト */
+.toast {
+  position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%);
+  background: #dc2626; color: #fff; font-size: 13px; font-weight: 700;
+  padding: 10px 18px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  z-index: 200; opacity: 0; transition: opacity .15s;
+}
+.toast.show { opacity: 1; }
+
+.canvas-note { font-size: 11px; color: var(--text-mut); margin-top: 8px; }
+
+.add-truck-dashed {
+  width: 100%; border: 1.5px dashed var(--line); background: #fafbfc;
+  color: var(--text-sub); font-weight: 600; padding: 14px; border-radius: 10px;
+}
+.add-truck-dashed:hover { border-color: #c3d3ef; color: var(--blue); }
+
+.empty-hint { color: var(--text-mut); text-align: center; padding: 40px 20px; font-size: 13px; }
+
+/* ---------------- 右：商品一覧 ---------------- */
+.right-head { display: flex; align-items: baseline; justify-content: space-between; }
+.right-sub { font-size: 11px; color: var(--text-mut); }
+.product-row {
+  border-bottom: 1px solid var(--line-2); padding: 12px 2px;
+  cursor: grab; position: relative;
+}
+.product-row:hover { background: #fafbfe; }
+.product-row.is-picked { background: #eef4fd; box-shadow: inset 3px 0 0 var(--blue); }
+.pr-top { display: flex; align-items: baseline; justify-content: space-between; }
+.pr-code { font-size: 26px; font-weight: 800; line-height: 1; }
+.pr-qty { font-size: 11px; color: var(--text-sub); background: #f1f3f6; padding: 2px 8px; border-radius: 5px; }
+.pr-name { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+.pr-remain { font-size: 13px; font-weight: 800; color: var(--blue); margin-top: 6px; }
+.pr-remain.is-zero { color: #c0392b; }
+.pr-del { position: absolute; right: 2px; bottom: 12px; border: none; background: transparent; color: var(--text-mut); font-size: 12px; }
+.pr-del:hover { color: #c0392b; }
+/* OCR結果の伝票グループ（RIGHT-002） */
+.ocr-group { border: 1px solid var(--line-2); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+.ocr-group-head { display: flex; align-items: center; gap: 8px; background: #f7f8fa; padding: 8px 10px; border-bottom: 1px solid var(--line-2); }
+.ocr-group-title { font-size: 12px; font-weight: 800; color: var(--text); }
+.ocr-group-name { flex: 1; min-width: 0; font-size: 11px; color: var(--text-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ocr-group-place { border: 1px solid #bcd2f4; background: #eef4fd; color: var(--blue); font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; flex: none; }
+.ocr-group-place:hover { background: #e0ebfb; }
+.ocr-group-del { border: none; background: transparent; color: var(--text-mut); font-size: 12px; font-weight: 600; flex: none; }
+.ocr-group-del:hover { color: #c0392b; }
+.ocr-group .product-row { padding: 10px; }
+.ocr-group .product-row:last-child { border-bottom: none; }
+.ocr-empty { font-size: 12px; color: var(--text-mut); padding: 10px; }
+
+.add-ocr-link { border: none; background: transparent; color: var(--blue); font-size: 13px; font-weight: 600; padding: 4px 2px 2px; width: 100%; text-align: left; }
+.add-ocr-link:hover { text-decoration: underline; }
+
+/* 業者トラック「その他」＝将来枠 */
+.truck-card.is-placeholder { opacity: .55; border-style: dashed; cursor: default; }
+.truck-card.is-placeholder:hover { background: #fff; border-color: var(--line); }
+
+.product-empty { color: var(--text-mut); font-size: 12px; padding: 24px 4px; text-align: center; line-height: 1.9; }
+.product-empty b { color: var(--text-sub); font-size: 13px; }
+.empty-types { display: flex; gap: 6px; justify-content: center; margin: 10px 0; }
+.upload-item { margin-bottom: 8px; }
+.upload-item:last-child { margin-bottom: 0; }
+
+.memo-block { margin-top: 18px; border-top: 1px solid var(--line-2); padding-top: 14px; }
+.memo-input {
+  width: 100%; min-height: 70px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 13px; color: var(--text);
+}
+.memo-input:focus { outline: none; border-color: var(--blue); }
+
+/* ---------------- 下部ヘルプ ---------------- */
+.helpbar {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px;
+  padding: 20px 24px 40px; color: var(--text-sub);
+}
+.help-title { font-weight: 700; color: var(--text); margin-bottom: 8px; font-size: 13px; }
+.helpbar ol, .helpbar ul { margin: 0; padding-left: 18px; font-size: 12px; }
+.helpbar li { margin-bottom: 4px; }
+.legend-box { display: inline-block; width: 14px; height: 12px; border: 1.5px solid var(--blue); border-radius: 3px; background: #eaf1fd; vertical-align: middle; }
+
+/* ---------------- モーダル（商品/トラック追加） ---------------- */
+.modal-mask {
+  position: fixed; inset: 0; background: rgba(20,25,35,.45);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.modal {
+  background: #fff; border-radius: 12px; padding: 22px; width: 380px; max-width: 92vw;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+}
+.modal h3 { margin: 0 0 16px; font-size: 16px; }
+.modal .field { margin-bottom: 12px; }
+.modal label { display: block; font-size: 12px; color: var(--text-sub); margin-bottom: 4px; font-weight: 600; }
+.modal input, .modal select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px;
+}
+.modal .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+/* ---------------- 印刷（PDF出力） ---------------- */
+.print-area { display: none; }
+
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body { background: #fff; }
+  .topbar, .stepbar, .layout, .helpbar, .modal-mask { display: none !important; }
+  .print-area { display: block !important; }
+}

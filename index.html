@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STEP Studio — 配送レイアウト</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ===================== ヘッダー ===================== -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-logo"></span>
+      <span class="brand-name">STEP Studio</span>
+      <span class="brand-sub">配送レイアウト</span>
+    </div>
+    <div class="topbar-project">
+      案件名：<input id="projectName" class="project-input" type="text" value="新規案件" placeholder="案件名を入力">
+    </div>
+    <div class="topbar-actions">
+      <span class="autosave">
+        <button class="btn" id="btnAutoSave">自動保存 OFF</button>
+        <span class="autosave-status" id="autoSaveStatus"></span>
+      </span>
+      <button class="btn" id="btnClearAll">全消去</button>
+      <button class="btn btn-primary" id="btnPdf">PDF出力</button>
+    </div>
+  </header>
+
+  <!-- ===================== メイン3カラム ===================== -->
+  <main class="layout">
+
+    <!-- 左：トラック一覧（折りたたみ） → 商品アップロード → 手入力 -->
+    <aside class="panel panel-left">
+      <!-- ① トラック一覧（STEP車両 / 業者トラックの2グループ・折りたたみ） -->
+      <div class="truck-accordion">
+        <button class="accordion-head" id="stepAccHead" aria-expanded="false">
+          <span class="acc-caret">▶</span>
+          <span class="acc-title">STEP車両</span>
+          <span class="acc-count" id="stepAccCount"></span>
+        </button>
+        <div class="accordion-body" id="stepAccBody" hidden>
+          <div class="truck-master-list" id="truckListStep"><!-- JSで生成 --></div>
+        </div>
+      </div>
+      <div class="truck-accordion">
+        <button class="accordion-head" id="gaishaAccHead" aria-expanded="false">
+          <span class="acc-caret">▶</span>
+          <span class="acc-title">業者トラック</span>
+          <span class="acc-count" id="gaishaAccCount"></span>
+        </button>
+        <div class="accordion-body" id="gaishaAccBody" hidden>
+          <div class="truck-master-list" id="truckListGaisha"><!-- JSで生成 --></div>
+        </div>
+      </div>
+
+      <!-- ② 商品アップロード（複数・サムネイル管理） -->
+      <div class="section-title">商品アップロード</div>
+      <div class="upload-box" id="uploadBox">
+        <div class="upload-plus">＋ 写真／PDFを追加</div>
+        <div class="upload-types">
+          <span class="chip">写真</span>
+          <span class="chip">PDF</span>
+          <span class="chip">複数可</span>
+        </div>
+        <div class="upload-hint">伝票を撮影／PDFで読込（混在可）</div>
+        <input type="file" id="fileSlip" accept="image/*,application/pdf" multiple hidden>
+      </div>
+      <div id="slipList"><!-- アップロード済み伝票のサムネイル一覧 --></div>
+
+      <!-- ③ 手入力（OCRできない商品用・追加先の伝票を選択）LEFT-005 -->
+      <div class="manual-box">
+        <div class="section-title">手入力（品番・数量）</div>
+        <div class="manual-field manual-slip">
+          <label for="manSlip">追加先の伝票</label>
+          <select id="manSlip"><!-- JSで生成 --></select>
+        </div>
+        <div class="manual-row">
+          <div class="manual-field">
+            <label for="manCode">品番</label>
+            <input id="manCode" type="text" placeholder="C6 / c-6 / Ｃ６ など">
+          </div>
+          <div class="manual-field manual-qty">
+            <label for="manQty">数量</label>
+            <input id="manQty" type="number" value="1" min="1">
+          </div>
+          <button class="btn btn-primary manual-add" id="btnManualAdd">追加</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 中央：荷台キャンバス -->
+    <section class="panel panel-center">
+      <div class="center-head">
+        <div class="center-title">選択中のトラック</div>
+      </div>
+
+      <div id="truckCanvases"><!-- JSで生成 --></div>
+
+      <button class="add-truck-dashed" id="btnAddTruckDashed">＋ トラック追加</button>
+    </section>
+
+    <!-- 右：商品一覧 / OCR結果 -->
+    <aside class="panel panel-right">
+      <div class="right-head">
+        <span class="section-title">伝票一覧</span>
+        <span class="right-sub">OCR読込結果</span>
+      </div>
+      <div id="productList"><!-- JSで生成 --></div>
+      <button class="add-ocr-link" id="btnAddOcr">＋ 伝票を追加読込</button>
+      <button class="btn btn-primary auto-place-btn" id="btnAutoPlace" hidden>トラックへ積む（自動配置）</button>
+    </aside>
+  </main>
+
+  <!-- ===================== 下部ヘルプ ===================== -->
+  <footer class="helpbar">
+    <div class="help-col">
+      <div class="help-title">操作方法</div>
+      <ol>
+        <li>商品をアップロード（写真／PDF）→ OCRで品番・数量を読取</li>
+        <li>左のトラックをクリックして荷台を表示（再クリックで削除・業者4tは複数追加）</li>
+        <li>商品を実寸のままドラッグ／クリックで荷台へ配置</li>
+        <li>残数を確認しながらPDFを出力・印刷</li>
+      </ol>
+    </div>
+    <div class="help-col">
+      <div class="help-title">表示の見方</div>
+      <ul>
+        <li><span class="legend-box"></span> 商品（幅×奥行の実寸比率で描画）</li>
+        <li>数字目盛：荷台内寸のmm位置（実寸スケール）</li>
+        <li>寸法表記：幅×奥行×高さ（mm）</li>
+      </ul>
+    </div>
+    <div class="help-col">
+      <div class="help-title">注意事項</div>
+      <ul>
+        <li>品番は変えず、配置ごとに残数のみ自動更新されます</li>
+        <li>商品同士は重ねられません（重なる位置は赤枠・配置不可）</li>
+        <li>荷台の外へは配置できません／積載率判定はMVP対象外です</li>
+      </ul>
+    </div>
+  </footer>
+
+  <!-- ===================== PDF印刷用レイアウト（画面では非表示） ===================== -->
+  <div id="printArea" class="print-area"><!-- JSで生成 --></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
