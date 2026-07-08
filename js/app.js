@@ -613,12 +613,15 @@ function renderCanvases() {
         ${m.estimated ? '<span class="tb-est">※暫定値</span>' : ''}
       </div>
       ${hasOOB ? '<div class="tb-oob-warning">⚠ 商品が荷台からはみ出しています。配置を確認してください。</div>' : ''}
-      <div class="dir-note">◀ 前方（運転席）：この向きが進行方向</div>
+      <div class="dir-note"><span class="dir-arrow">◀</span> 前方（運転席）：この向きが進行方向</div>
       <div class="canvas-wrap">
         <div class="truck-cab" title="前方（運転席）">
+          <div class="cab-roof"></div>
           <div class="cab-glass"></div>
           <span class="cab-label">前</span>
+          <div class="cab-wheel"></div>
         </div>
+        <div class="cab-boundary"></div>
         <div class="cargo"></div>
       </div>
       <div class="canvas-note">ドラッグ／クリックで配置（重ねられません・荷台外は不可）。ダブルクリックで90°回転／選択してDeleteで削除。</div>`;

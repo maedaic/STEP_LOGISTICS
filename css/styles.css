@@ -268,6 +268,8 @@ input, textarea { font-family: inherit; }
 
 /* ---------------- 進行方向の注記 ---------------- */
 .dir-note { font-size: 11px; color: var(--text-sub); margin: 2px 0 6px; font-weight: 600; }
+.dir-arrow { display: inline-block; color: var(--blue); font-weight: 800; animation: dirPulse 1.6s ease-in-out infinite; }
+@keyframes dirPulse { 0%, 100% { transform: translateX(0); opacity: 1; } 50% { transform: translateX(-3px); opacity: .55; } }
 
 /* ---------------- キャンバス本体 ---------------- */
 .canvas-wrap { position: relative; padding-left: 48px; padding-top: 18px; }
@@ -289,20 +291,37 @@ input, textarea { font-family: inherit; }
 }
 .cargo.drop-hint { outline: 2px dashed var(--blue); outline-offset: -4px; }
 
-/* トラック前方（運転席）キャビン表現。左＝前方＝進行方向（CENTER-001） */
+/* トラック前方（運転席）キャビン表現。左＝前方＝進行方向（CENTER-001）
+ * 実車に近い立体感（上面ハイライト＋下面シェード）とホイールで「前」を直感的に示す。 */
 .truck-cab {
-  position: absolute; left: 6px; top: 18px; bottom: 0; width: 36px;
-  background: linear-gradient(90deg, #c3ccd9, #d7dde6);
-  border: 1.5px solid #aeb8c6;
-  border-radius: 12px 3px 3px 12px;   /* 左（前）を丸めてノーズ感 */
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  box-shadow: inset 2px 0 0 rgba(255,255,255,.5);
+  position: absolute; left: 4px; top: 18px; bottom: 0; width: 40px;
+  background: linear-gradient(160deg, #e4e9f1 0%, #c3ccd9 55%, #a9b4c4 100%);
+  border: 1.5px solid #8f9baa;
+  border-radius: 16px 4px 4px 16px;   /* 左（前）を丸めてノーズ感 */
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px;
+  padding-top: 10px;
+  box-shadow: inset 2px 2px 0 rgba(255,255,255,.6), inset -2px -3px 4px rgba(0,0,0,.12), 1px 0 3px rgba(0,0,0,.08);
+}
+.cab-roof {
+  width: 26px; height: 4px; border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, #f3f5f8, #d3dae3);
 }
 .cab-glass {
-  width: 22px; height: 14px; background: #dbe8fb;
-  border: 1px solid #9fb4d6; border-radius: 2px;
+  width: 24px; height: 16px; background: linear-gradient(160deg, #eaf3ff, #a9c6ec 70%);
+  border: 1px solid #8fabd6; border-radius: 3px 6px 2px 2px;
+  box-shadow: inset -3px -3px 4px rgba(30,60,120,.18);
 }
-.cab-label { font-size: 12px; font-weight: 800; color: #4a5566; letter-spacing: 1px; }
+.cab-label { font-size: 12px; font-weight: 800; color: #3d4756; letter-spacing: 1px; }
+.cab-wheel {
+  width: 15px; height: 15px; border-radius: 50%; margin-top: auto; margin-bottom: 4px;
+  background: radial-gradient(circle at 35% 35%, #555 0%, #222 70%);
+  border: 2px solid #111; box-shadow: 0 1px 2px rgba(0,0,0,.4);
+}
+/* キャビンと荷台の境目を明示する仕切り */
+.cab-boundary {
+  position: absolute; left: 46px; top: 18px; bottom: 0; width: 2px;
+  background: repeating-linear-gradient(180deg, #b7c0cd 0, #b7c0cd 4px, transparent 4px, transparent 8px);
+}
 
 .placement {
   position: absolute; box-sizing: border-box;
