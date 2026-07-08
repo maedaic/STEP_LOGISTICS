@@ -666,6 +666,31 @@ function insideCargo(rect, m) {
     rect.x + rect.w <= m.cargoLength + 0.5 && rect.y + rect.h <= m.cargoWidth + 0.5;
 }
 
+/**
+ * 接触度スコア（AUTO-001/002）: 壁・既存商品にどれだけ隙間なく接するかを数値化する。
+ * スコアが高いほど「浮いた隙間」を作らない配置。縦横どちらの向きが良いかは決め打ちせず、
+ * このスコアが高い向き・位置を機械的に選ぶ（＝デッドスペースを作らないことを最優先）。
+ */
+function contactScore(t, m, x, y, w, h) {
+  const EPS = 1;
+  let score = 0;
+  if (x <= EPS) score++;                          // 前壁（運転席側）に接する
+  if (y <= EPS) score++;                          // 側壁に接する
+  if (x + w >= m.cargoLength - EPS) score++;      // 後壁に接する
+  if (y + h >= m.cargoWidth - EPS) score++;       // 反対側の側壁に接する
+  state.placements.forEach(p => {
+    if (p.truckInstanceId !== t.instanceId) return;
+    const r = boxRect(p);
+    const xTouch = Math.abs(r.x + r.w - x) <= EPS || Math.abs(x + w - r.x) <= EPS;
+    const yOverlap = y < r.y + r.h && y + h > r.y;
+    if (xTouch && yOverlap) score++;              // 前後の既存商品に接する
+    const yTouch = Math.abs(r.y + r.h - y) <= EPS || Math.abs(y + h - r.y) <= EPS;
+    const xOverlap = x < r.x + r.w && x + w > r.x;
+    if (yTouch && xOverlap) score++;              // 左右の既存商品に接する
+  });
+  return score;
+}
+
 /* -------- 配置不可トースト -------- */
 let toastTimer = null;
 function toast(msg) {
@@ -771,10 +796,10 @@ function flashNoStock(code) {
  *
  *  phase1: 高さ(H)降順にソート（同高はフットプリント大きい順）
  *          → 高い商品を先に処理することで、高さが近い商品同士が処理順的に隣接しやすくなる
- *  phase2: 前方(荷台の x=0 側=運転席側)から順に走査。x昇順→y昇順の完全ラスタ探索のため、
- *          常に (0,0) 側から調べ直す＝前面を隙間なく埋め、新しい列（大きいx）は最後に使う
- *  phase3/4: 各候補セルで 0°/90° の両方を試し、隙間にフィットする向きを優先
- *          （既存スペースの探索を尽くしてから新しい列に進む。小型商品もこの走査で自然に隙間へ収まる）
+ *  phase2〜4: トラックは前方から埋める（先頭トラックが埋まるまで次のトラックへ進まない）。
+ *          各トラック内では、縦横の向きを固定せず、壁・既存商品への接触度スコアが
+ *          最も高い位置と向きを機械的に選ぶ（＝デッドスペースを作らないことを最優先）。
+ *          縦置き・横置きどちらが良いかは決め打ちしない。
  *  phase5: 二段積み可能品（C6等）は新規フットプリントを使わず、前方の既存プレースへ積み増す
  *          （＝隙間を作らず上段へ乗せる。§CENTER-003）
  *
@@ -801,29 +826,36 @@ function placeUnits(units) {
       if (target) { target.stack = (target.stack || 1) + 1; placed++; return; }
     }
 
-    // phase2+3+4: 前方(小x)→幅(小y)の順にラスタ走査。各セルで0°/90°を試し、
-    //             隙間にフィットする向きがあれば新しい列を作る前にそこを使う
+    // phase2〜4: トラックを前方（先頭）から順に試し、そのトラック内で
+    //            接触度スコア最大の(x, y, 向き)を選ぶ＝隙間を残さない配置を優先
     const fp0 = footprint(info, 0);
     const fp90 = footprint(info, 90);
     const minLenX = Math.min(fp0.lenX, fp90.lenX);
     const minLenY = Math.min(fp0.lenY, fp90.lenY);
-    let done = false;
+    let placedHere = false;
+
     for (const t of state.trucks) {
       const m = truckDims(t);
-      for (let x = 0; x + minLenX <= m.cargoLength && !done; x += STEP) {
-        for (let y = 0; y + minLenY <= m.cargoWidth && !done; y += STEP) {
+      let best = null;   // { x, y, rot, fp, score }
+
+      for (let x = 0; x + minLenX <= m.cargoLength; x += STEP) {
+        for (let y = 0; y + minLenY <= m.cargoWidth; y += STEP) {
           for (const [fp, rot] of [[fp0, 0], [fp90, 90]]) {
             if (x + fp.lenX > m.cargoLength || y + fp.lenY > m.cargoWidth) continue;
-            if (!collides(t.instanceId, { x, y, w: fp.lenX, h: fp.lenY })) {
-              state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(x), y: Math.round(y), rotation: rot, stack: 1 });
-              placed++; done = true; break;
-            }
+            if (collides(t.instanceId, { x, y, w: fp.lenX, h: fp.lenY })) continue;
+            const score = contactScore(t, m, x, y, fp.lenX, fp.lenY);
+            if (!best || score > best.score) best = { x, y, rot, fp, score };
           }
         }
       }
-      if (done) break;
+
+      if (best) {
+        state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
+        placed++; placedHere = true;
+        break;   // このトラックに置けたので次のトラックは試さない（前方＝先頭トラックから埋める）
+      }
     }
-    if (!done) failed++;
+    if (!placedHere) failed++;
   });
 
   renderProductList();
