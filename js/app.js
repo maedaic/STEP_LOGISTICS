@@ -21,6 +21,7 @@ let state = {
   products: [],    // ★導出（slips.items + manual を品番で集計）{ code, name, width, depth, height, qty, color }
   placements: [],  // { id, truckInstanceId, code, x, y, rotation }
   productModes: {},  // 折りたたみ対応商品の状態 { code: 'folded' | 'unfolded' }（③C24C等）
+  materialIncluded: {},  // 部材（型式A等）を積載対象に含めるか { code: true }。既定は対象外
 };
 
 let pickedCode = null;   // クリック配置用に選択中の品番
@@ -308,6 +309,16 @@ function effectiveMasterDims(master) {
     : { width: master.folded.width, depth: master.folded.depth, height: master.folded.height };
 }
 
+/**
+ * 伝票上の「型式」がこれらの値のときは実在の商品コードではなく部材（ガラス等）を指す。
+ * 型式は画面に表示せず商品名のみ表示し、デフォルトではトラック積載対象外にする（Logistics改善指示書 §1）。
+ * 商品マスター照合は行わない（OCRが読み取った商品名をそのまま使う）。
+ */
+const MATERIAL_TYPE_CODES = ['A'];
+function isMaterialType(code) {
+  return MATERIAL_TYPE_CODES.includes(String(code).trim().toUpperCase());
+}
+
 function rebuildProducts() {
   mergeManualDuplicates();   // 過去に分かれて保存された同一品番の手入力行を統合（自己修復）
 
@@ -318,12 +329,24 @@ function rebuildProducts() {
     if (!cur.def && def) cur.def = def;
     agg.set(code, cur);
   };
-  state.slips.forEach(s => (s.items || []).forEach(it => add(it.code, it.qty, null)));
+  state.slips.forEach(s => (s.items || []).forEach(it => add(it.code, it.qty, it.def)));
   state.manual.forEach(m => add(m.code, m.qty, m.def));
 
   let ci = 0;
   const products = [];
   agg.forEach((v, code) => {
+    const isMaterial = isMaterialType(code);
+    if (isMaterial) {
+      // 部材（型式A等）: 商品マスター照合はせず、OCR/手入力の名称をそのまま使う
+      const name = (v.def && v.def.name) || code;
+      products.push({
+        code, name, isMaterial: true,
+        width: (v.def && v.def.width) || 400, depth: (v.def && v.def.depth) || 400, height: (v.def && v.def.height) || 400,
+        qty: v.qty, color: (v.def && v.def.color) || pickColor(ci), stackable: null, maxStack: 1,
+      });
+      ci++;
+      return;
+    }
     const master = getProductMaster(code);
     if (master) {
       const dims = effectiveMasterDims(master);
@@ -374,7 +397,9 @@ function renderUploads() {
   state.slips.forEach((s, idx) => {
     const row = document.createElement('div');
     row.className = 'slip-row';
-    const itemsText = (s.items || []).map(it => `${it.code}×${it.qty}`).join('・') || '読取なし';
+    const itemsText = (s.items || [])
+      .map(it => `${isMaterialType(it.code) ? ((it.def && it.def.name) || '部材') : it.code}×${it.qty}`)
+      .join('・') || '読取なし';
     const thumb = s.isImage && s.thumbUrl
       ? `<span class="slip-thumb"><img src="${s.thumbUrl}" alt=""></span>`
       : `<span class="slip-thumb">📄</span>`;
@@ -414,8 +439,10 @@ function buildProductRow(code, qtyInSource) {
   const info = productInfo(code);
   const rem = remainingByCode(code);
   const row = document.createElement('div');
-  row.className = 'product-row' + (pickedCode === code ? ' is-picked' : '');
-  row.setAttribute('draggable', 'true');
+  const included = !!state.materialIncluded[code];
+  const loadable = !info.isMaterial || included;
+  row.className = 'product-row' + (pickedCode === code ? ' is-picked' : '') + (info.isMaterial ? ' is-material' : '');
+  row.setAttribute('draggable', loadable ? 'true' : 'false');
   row.dataset.code = code;
 
   // ③展開⇄折りたたみトグル（対応商品のみ・初期値は折りたたみ）
@@ -427,19 +454,41 @@ function buildProductRow(code, qtyInSource) {
       <button class="fold-btn ${foldMode === 'unfolded' ? 'is-on' : ''}" data-fold="unfolded">展開</button>
     </div>` : '';
 
-  row.innerHTML = `
-    <div class="pr-top">
-      <span class="pr-code">${code}</span>
-      <span class="pr-qty">×${qtyInSource}</span>
-    </div>
-    <div class="pr-name">${info.name}　${info.width}×${info.depth}×${info.height}</div>
-    ${foldToggle}
-    <div class="pr-remain ${rem <= 0 ? 'is-zero' : ''}">残${rem}</div>`;
+  if (info.isMaterial) {
+    // 部材（型式A等）: 型式は表示せず商品名のみ。既定ではトラック積載対象外（Logistics改善指示書 §1）
+    row.innerHTML = `
+      <div class="pr-top">
+        <span class="pr-name">${info.name}</span>
+        <span class="pr-qty">×${qtyInSource}</span>
+      </div>
+      <label class="pr-material-toggle" data-stop>
+        <input type="checkbox" ${included ? 'checked' : ''}> トラックへ積む
+      </label>
+      <div class="pr-remain ${rem <= 0 ? 'is-zero' : ''}">残${rem}</div>`;
+    row.querySelector('.pr-material-toggle input').addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.materialIncluded[code] = e.target.checked;
+      renderProductList();
+      renderCanvases();
+      saveToLocal();
+    });
+  } else {
+    row.innerHTML = `
+      <div class="pr-top">
+        <span class="pr-code">${code}</span>
+        <span class="pr-qty">×${qtyInSource}</span>
+      </div>
+      <div class="pr-name">${info.name}　${info.width}×${info.depth}×${info.height}</div>
+      ${foldToggle}
+      <div class="pr-remain ${rem <= 0 ? 'is-zero' : ''}">残${rem}</div>`;
+  }
   row.addEventListener('click', () => {
+    if (!loadable) { toast('部材はデフォルトで積載対象外です。「トラックへ積む」をONにしてください'); return; }
     pickedCode = (pickedCode === code) ? null : code;
     renderProductList();
   });
   row.addEventListener('dragstart', (e) => {
+    if (!loadable) { e.preventDefault(); toast('部材はデフォルトで積載対象外です。「トラックへ積む」をONにしてください'); return; }
     e.dataTransfer.setData('text/plain', code);
     e.dataTransfer.effectAllowed = 'copy';
   });
@@ -632,7 +681,7 @@ function buildPlacementEl(p, truck, scale) {
   const stackBadge = (p.stack || 1) > 1 ? `<span class="p-stack">${p.stack}段</span>` : '';
   el.innerHTML = `${stackBadge}
     <span class="p-remove" title="配置を取り消す">×</span>
-    <span class="p-code">${p.code}</span>
+    <span class="p-code">${info.isMaterial ? info.name : p.code}</span>
     <span class="p-size">${fp.lenX}×${fp.lenY}</span>`;
   return el;
 }
@@ -683,7 +732,7 @@ function buildSidePlacementEl(g, truck, scale) {
   let tiers = '';
   for (let i = g.stackCount - 1; i >= 0; i--) {
     tiers += `<div class="placement-tier" style="height:${tierPx}px;border-color:${info.color};background:${hexToRgba(info.color, 0.10)}">
-      <span class="p-code">${g.code}</span>
+      <span class="p-code">${info.isMaterial ? info.name : g.code}</span>
       <span class="p-size">${g.stackCount > 1 ? (i + 1) + '段目' : g.lenX + '×' + info.height}</span>
     </div>`;
   }
@@ -745,11 +794,12 @@ function attachCargoHandlers(cargo, truckInstance, m) {
 function dropProductAt(code, truckInstance, m, mmX, mmY) {
   const prod = state.products.find(p => p.code === code);
   if (!prod) return;
+  if (prod.isMaterial && !state.materialIncluded[code]) { toast('部材はデフォルトで積載対象外です。「トラックへ積む」をONにしてください'); return; }
   if (remaining(prod) <= 0) { flashNoStock(code); toast(`${code} は残りがありません`); return; }
 
   const info = productInfo(code);
 
-  // 二段積み: 同一品番の上へドロップしたら段を重ねる（C6のみ / maxStackまで）CENTER-003
+  // 二段積み: 同一品番の上へドロップしたら段を重ねる（商品マスターのstackable/maxStackに従う）CENTER-003
   if (canStack(info)) {
     const onTop = state.placements.find(p =>
       p.truckInstanceId === truckInstance.instanceId && p.code === code && (p.stack || 1) < (info.maxStack || 1) &&
@@ -1086,7 +1136,10 @@ function placeResultToast(prefix, r) {
 /** 全体を自動配置（残数ぶん） */
 function autoPlaceAll() {
   const units = [];
-  state.products.forEach(p => { for (let i = 0; i < remaining(p); i++) units.push(p.code); });
+  state.products.forEach(p => {
+    if (p.isMaterial && !state.materialIncluded[p.code]) return;   // 部材は既定で自動配置の対象外
+    for (let i = 0; i < remaining(p); i++) units.push(p.code);
+  });
   if (units.length === 0) { toast('配置する残数がありません'); return; }
   const r = placeUnits(units);
   if (r.noTruck) return;
@@ -1100,6 +1153,7 @@ function autoPlaceSlip(slipId) {
   const units = [];
   const used = {};
   (s.items || []).forEach(it => {
+    if (isMaterialType(it.code) && !state.materialIncluded[it.code]) return;   // 部材は既定で自動配置の対象外
     const cap = remainingByCode(it.code) - (used[it.code] || 0);
     const n = Math.min(it.qty, Math.max(0, cap));
     for (let i = 0; i < n; i++) units.push(it.code);
@@ -1279,6 +1333,7 @@ function clearAllPlacements() {
       state.products = [];
       state.placements = [];
       state.productModes = {};
+      state.materialIncluded = {};
       pickedCode = null;
       selectedPid = null;
       renderAll();
@@ -1346,8 +1401,9 @@ function handleSlipUpload(e) {
  * （伝票1: C6×8,C8N×3 ／ 伝票2: C6×8,C9×4 → C6は16に集計）。全て実在コード。
  */
 function runOcrStub(slipIndex) {
+  // 型式「A」＝部材（商品マスター照合なし・名称は def.name をそのまま使用）§1
   const sets = [
-    [{ code: 'C6', qty: 8 }, { code: 'C8N', qty: 3 }],
+    [{ code: 'C6', qty: 8 }, { code: 'C8N', qty: 3 }, { code: 'A', qty: 2, def: { name: 'ガラス', width: 500, depth: 500, height: 10 } }],
     [{ code: 'C6', qty: 8 }, { code: 'C9', qty: 4 }],
     [{ code: 'C2C', qty: 4 }, { code: 'C90C', qty: 2 }],
   ];
@@ -1426,6 +1482,7 @@ function serialize() {
     manual: state.manual,
     placements: state.placements,
     productModes: state.productModes,   // ③展開/折りたたみの選択状態
+    materialIncluded: state.materialIncluded,   // 部材（型式A等）の積載対象フラグ
   };
 }
 function saveToLocal() {
@@ -1445,7 +1502,7 @@ function hydrate(obj) {
   state.trucks = (obj.trucks || []).map(t => ({ instanceId: t.instanceId || uid('t'), masterId: t.masterId, seq: t.seq, viewMode: t.viewMode || 'top' }));
   state.slips = (obj.slips || []).map(s => ({
     id: s.id || uid('s'), name: s.name || '伝票', isImage: !!s.isImage, thumbUrl: null,
-    items: (s.items || []).map(it => ({ code: it.code, qty: it.qty })),
+    items: (s.items || []).map(it => ({ code: it.code, qty: it.qty, def: it.def || null })),
   }));
   state.manual = (obj.manual || []).map(m => ({ id: m.id || uid('m'), code: m.code, qty: m.qty, def: m.def || null }));
   // 旧形式（products直保存・slips/manualなし）の移行: products を手入力ソースへ変換
@@ -1460,6 +1517,7 @@ function hydrate(obj) {
     x: p.x || 0, y: p.y || 0, rotation: p.rotation || 0, stack: p.stack || 1,
   }));
   state.productModes = obj.productModes || {};
+  state.materialIncluded = obj.materialIncluded || {};
   rebuildProducts();
 }
 function saveProjectFile() {
@@ -1618,9 +1676,9 @@ function outputPdf() {
   const productsHtml = state.products.map(p => {
     const rem = remaining(p);
     return `<tr>
-      <td style="font-weight:700">${p.code}</td>
+      <td style="font-weight:700">${p.isMaterial ? '' : p.code}</td>
       <td>${p.name}</td>
-      <td style="text-align:center">${p.width}×${p.depth}×${p.height}</td>
+      <td style="text-align:center">${p.isMaterial ? '' : `${p.width}×${p.depth}×${p.height}`}</td>
       <td style="text-align:center">${p.qty}</td>
       <td style="text-align:center;font-weight:700;${rem <= 0 ? 'color:#c0392b' : ''}">${rem}</td>
     </tr>`;
@@ -1669,7 +1727,7 @@ function renderPrintTruck(truckInstance, m, no) {
       width:${fp.lenX * scale}px;height:${fp.lenY * scale}px;
       border:1.5px solid ${info.color};background:${hexToRgba(info.color, .12)};color:${info.color};
       font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:3px">
-      ${p.code}</div>`;
+      ${info.isMaterial ? info.name : p.code}</div>`;
   });
 
   return `<div style="margin-bottom:14px;break-inside:avoid">

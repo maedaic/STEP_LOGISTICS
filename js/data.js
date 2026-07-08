@@ -64,8 +64,8 @@ const TRUCK_MASTER = [
 const PRODUCT_MASTER = [
   // 宝飾スタンダードケース
   { code: 'C6',      name: '宝飾ケース（黒）',              category: '宝飾スタンダードケース', width: 1500, depth: 500, height: 920,  price: 16500, weight: null, stackable: true, maxStack: 2, glass: true, color: '#2563eb' },
-  { code: 'C6-12',   name: '宝飾ケース（黒）',              category: '宝飾スタンダードケース', width: 1200, depth: 500, height: 920,  price: 16500, weight: null, stackable: null, maxStack: 1, glass: true, color: '#2563eb' },
-  { code: 'C6-09',   name: '宝飾ケース（黒）',              category: '宝飾スタンダードケース', width: 900,  depth: 500, height: 920,  price: 15400, weight: null, stackable: null, maxStack: 1, glass: true, color: '#2563eb' },
+  { code: 'C6-12',   name: '宝飾ケース（黒）',              category: '宝飾スタンダードケース', width: 1200, depth: 500, height: 920,  price: 16500, weight: null, stackable: true, maxStack: 2, glass: true, color: '#2563eb' },
+  { code: 'C6-09',   name: '宝飾ケース（黒）',              category: '宝飾スタンダードケース', width: 900,  depth: 500, height: 920,  price: 15400, weight: null, stackable: true, maxStack: 2, glass: true, color: '#2563eb' },
   { code: 'C6D',     name: '宝飾ケース（大理石）',          category: '宝飾スタンダードケース', width: 1500, depth: 500, height: 920,  price: 16500, weight: null, stackable: null, maxStack: 1, glass: true, color: '#2563eb' },
   { code: 'C6D-12',  name: '宝飾ケース（大理石）',          category: '宝飾スタンダードケース', width: 1200, depth: 500, height: 920,  price: 16500, weight: null, stackable: null, maxStack: 1, glass: true, color: '#2563eb' },
   { code: 'C6D-09',  name: '宝飾ケース（大理石）',          category: '宝飾スタンダードケース', width: 900,  depth: 500, height: 920,  price: 15400, weight: null, stackable: null, maxStack: 1, glass: true, color: '#2563eb' },
@@ -124,8 +124,8 @@ const PRODUCT_MASTER = [
   // ガラスケース
   { code: 'C0C',     name: 'ガラスケース W900',             category: 'ガラスケース', width: 900,  depth: 500, height: 940, price: 14300, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9' },
   { code: 'C1C',     name: 'ガラスケース W1200',            category: 'ガラスケース', width: 1200, depth: 500, height: 940, price: 14300, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9' },
-  { code: 'C2C',     name: 'ガラスケース W1500',            category: 'ガラスケース', width: 1500, depth: 500, height: 940, price: 14300, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9' },
-  { code: 'C3C',     name: 'ガラスケース W1800',            category: 'ガラスケース', width: 1800, depth: 500, height: 940, price: 16500, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9' },
+  { code: 'C2C',     name: 'ガラスケース W1500',            category: 'ガラスケース', width: 1500, depth: 500, height: 940, price: 14300, weight: null, stackable: true, maxStack: 2, glass: true, color: '#0ea5e9' },
+  { code: 'C3C',     name: 'ガラスケース W1800',            category: 'ガラスケース', width: 1800, depth: 500, height: 940, price: 16500, weight: null, stackable: true, maxStack: 2, glass: true, color: '#0ea5e9' },
   // width/depth/height＝展開状態の実寸。folded＝折りたたみ状態の実寸（2026-07-08 確認済み）。
   // 初期値は「折りたたみ」（Sprint UI改善 ③）。
   { code: 'C24C',    name: 'ガラスケース(折りたたみ式)',    category: 'ガラスケース', width: 1500, depth: 600, height: 900, price: 11000, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9',
