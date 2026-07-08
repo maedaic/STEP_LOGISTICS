@@ -609,6 +609,7 @@ function renderCanvases() {
     const truckPlacements = state.placements.filter(p => p.truckInstanceId === t.instanceId);
     const hasPlace = truckPlacements.length > 0;
     const hasOOB = truckPlacements.some(p => isPlacementOOB(p, m));   // ②はみ出し警告
+    const hasCollision = truckPlacements.some(p => collides(t.instanceId, boxRect(p), p.id));   // 干渉警告（指示書Ver.2 §8）
     const block = document.createElement('div');
     block.className = 'truck-block';
     block.innerHTML = `
@@ -627,6 +628,7 @@ function renderCanvases() {
         ${m.estimated ? '<span class="tb-est">※暫定値</span>' : ''}
       </div>
       ${hasOOB ? '<div class="tb-oob-warning">⚠ 商品が荷台からはみ出しています。配置を確認してください。</div>' : ''}
+      ${hasCollision ? '<div class="tb-oob-warning">⚠ 商品同士が干渉しています。位置を調整してください。</div>' : ''}
       <div class="dir-note"><span class="dir-arrow">◀</span> 前方（運転席）：この向きが進行方向</div>
       <div class="canvas-wrap">
         <div class="truck-cab" title="前方（運転席）">
@@ -691,8 +693,10 @@ function buildPlacementEl(p, truck, scale) {
   const fp = footprint(info, p.rotation);
   const el = document.createElement('div');
   const oob = isPlacementOOB(p, truck);   // ②自動配置改善：はみ出し配置を視覚的に明示
-  el.className = 'placement' + (selectedPid === p.id ? ' is-selected' : '') + (oob ? ' out-of-bounds' : '');
+  const interfering = collides(p.truckInstanceId, boxRect(p), p.id);   // 干渉中の商品を赤枠で明示（指示書Ver.2 §8）
+  el.className = 'placement' + (selectedPid === p.id ? ' is-selected' : '') + (oob ? ' out-of-bounds' : '') + (interfering ? ' collide' : '');
   if (oob) el.title = '荷台からはみ出しています';
+  else if (interfering) el.title = '他の商品と干渉しています';
   el.dataset.pid = p.id;
 
   const wpx = fp.lenX * scale;
@@ -840,17 +844,12 @@ function dropProductAt(code, truckInstance, m, mmX, mmY) {
   }
 
   const fp = footprint(info, 0);
-  // クリック位置を中心に置く（荷台内へクランプ＝荷台外には出さない §6）
+  // クリック位置を中心に置く（荷台内へクランプ＝荷台外には出さない）
   let x = mmX - fp.lenX / 2;
   let y = mmY - fp.lenY / 2;
   ({ x, y } = clampToCargo(x, y, fp, m));
 
-  // 当たり判定: 重なる位置には置けない（§6）
-  if (collides(truckInstance.instanceId, { x, y, w: fp.lenX, h: fp.lenY })) {
-    toast('他の商品と重なるため配置できません');
-    return;
-  }
-
+  // 他商品との重なりは配置自体を拒否せず許可する。干渉は警告バナーで示し、ユーザーが後で調整する（指示書Ver.2 §8）
   state.placements.push({ id: uid('p'), truckInstanceId: truckInstance.instanceId, code, x: Math.round(x), y: Math.round(y), rotation: 0, stack: 1 });
   pickedCode = null;
   renderProductList();
@@ -931,9 +930,10 @@ function computeFreeRects(t, m, extraLen = 0, extraWid = 0) {
 
 /**
  * 空き長方形群の中から商品(0°/90°)を置く場所を選ぶ（AUTO-001/002/008）。
- * 優先順位は仕様の「配置優先順位」に対応：
- *   ① 前方(小x)を最優先 → ② 前面を埋める(小y)を次点 → ③ 同じ位置なら最もフィットする向き
- * 積載率の最大化より、前方から順に詰まっていく分かりやすさを優先する。
+ * 優先順位（指示書Ver.2 §9・積載効率を最優先）：
+ *   ① 最も無駄なくフィットする向き・空き（shortSideが最小＝空きスペースを最小化）を最優先
+ *   ② 同程度のフィットなら前方(小x)→前面(小y)の順で選ぶ（同点時のみ見た目を考慮）
+ * 「同じ商品を綺麗に並べる」見た目の分かりやすさより、積載率の最大化を優先する。
  */
 function bestFreeRectFit(freeRects, fp0, fp90) {
   let best = null;
@@ -945,9 +945,9 @@ function bestFreeRectFit(freeRects, fp0, fp90) {
       if (!bestForRect || shortSide < bestForRect.shortSide) bestForRect = { rot, fp, shortSide };
     });
     if (!bestForRect) return;
-    if (!best || r.x < best.x - 0.5 ||
-        (Math.abs(r.x - best.x) <= 0.5 && r.y < best.y - 0.5) ||
-        (Math.abs(r.x - best.x) <= 0.5 && Math.abs(r.y - best.y) <= 0.5 && bestForRect.shortSide < best.shortSide)) {
+    if (!best || bestForRect.shortSide < best.shortSide - 0.5 ||
+        (Math.abs(bestForRect.shortSide - best.shortSide) <= 0.5 && r.x < best.x - 0.5) ||
+        (Math.abs(bestForRect.shortSide - best.shortSide) <= 0.5 && Math.abs(r.x - best.x) <= 0.5 && r.y < best.y - 0.5)) {
       best = { x: r.x, y: r.y, rot: bestForRect.rot, fp: bestForRect.fp, shortSide: bestForRect.shortSide };
     }
   });
@@ -982,34 +982,38 @@ function startBoxDrag(e, el, cargo, truckInstance, m) {
   const fp = footprint(info, p.rotation);
   const startX = e.clientX, startY = e.clientY;
   const origX = p.x, origY = p.y;
-  let lastValid = { x: origX, y: origY };   // 最後に重ならなかった位置
+  let curX = origX, curY = origY;
   el.classList.add('dragging');
   el.setPointerCapture(e.pointerId);
 
+  // ドラッグ中は荷台外へ出ることも他商品との重なりも一時的に許可する（指示書Ver.2 §7/§8）。
+  // 位置調整のしやすさを優先し、可否判定は指を離した「配置確定」の瞬間にのみ行う。
   const move = (ev) => {
-    let nx = origX + (ev.clientX - startX) / scale;
-    let ny = origY + (ev.clientY - startY) / scale;
-    ({ x: nx, y: ny } = clampToCargo(nx, ny, fp, m));   // 荷台外へは出さない
-    // カーソルには追従しつつ、重なる位置は赤枠で「置けない」を明示
-    el.style.left = (nx * scale) + 'px';
-    el.style.top = (ny * scale) + 'px';
-    if (collides(truckInstance.instanceId, { x: nx, y: ny, w: fp.lenX, h: fp.lenY }, p.id)) {
-      el.classList.add('collide');
-    } else {
-      el.classList.remove('collide');
-      lastValid = { x: nx, y: ny };
-    }
+    curX = origX + (ev.clientX - startX) / scale;
+    curY = origY + (ev.clientY - startY) / scale;
+    el.style.left = (curX * scale) + 'px';
+    el.style.top = (curY * scale) + 'px';
+    const rect = { x: curX, y: curY, w: fp.lenX, h: fp.lenY };
+    el.classList.toggle('collide', collides(truckInstance.instanceId, rect, p.id));
+    el.classList.toggle('oob-drag', !insideCargo(rect, m));
   };
   const up = () => {
     el.removeEventListener('pointermove', move);
     el.removeEventListener('pointerup', up);
-    el.classList.remove('dragging');
-    el.classList.remove('collide');
-    // 重なる位置で離した場合は、直近の有効位置へスナップバック
-    p.x = Math.round(lastValid.x);
-    p.y = Math.round(lastValid.y);
-    el.style.left = (p.x * scale) + 'px';
-    el.style.top = (p.y * scale) + 'px';
+    el.classList.remove('dragging', 'collide', 'oob-drag');
+
+    const rect = { x: curX, y: curY, w: fp.lenX, h: fp.lenY };
+    if (insideCargo(rect, m)) {
+      // 荷台内であれば、他商品と重なっていてもそのまま確定する（干渉は警告バナーで表示）
+      p.x = Math.round(curX);
+      p.y = Math.round(curY);
+    } else {
+      // 荷台外での確定は不可 → 元の位置へ戻す
+      toast('荷台外のため配置できません');
+      p.x = origX;
+      p.y = origY;
+    }
+    renderCanvases();   // はみ出し／干渉の警告バナーを再評価
     saveToLocal();
   };
   el.addEventListener('pointermove', move);
@@ -1028,13 +1032,9 @@ function rotatePlacement(pid) {
   const m = truckDims(state.trucks.find(t => t.instanceId === p.truckInstanceId));
   const newRot = (p.rotation === 90) ? 0 : 90;
   const fp = footprint(productInfo(p.code), newRot);
-  // 回転後に荷台からはみ出す分は押し戻す
+  // 回転後に荷台からはみ出す分は押し戻す（荷台外には出さない）
   const pos = clampToCargo(p.x, p.y, fp, m);
-  // 回転で他商品と重なるなら回転を取り消す（§6）
-  if (collides(p.truckInstanceId, { x: pos.x, y: pos.y, w: fp.lenX, h: fp.lenY }, p.id)) {
-    toast('回転すると他の商品と重なります');
-    return;
-  }
+  // 縦横の切替は他商品と重なっていても常に許可する。干渉は警告バナーで示すのみ（指示書Ver.2 §6/§8）
   p.rotation = newRot;
   p.x = pos.x; p.y = pos.y;
   renderCanvases();
@@ -1094,6 +1094,8 @@ function placeUnits(units, targetTruckId) {
     return (ib.height - ia.height) || (ib.width * ib.depth - ia.width * ia.depth);
   });
 
+  const failedByCode = {};   // 積み切れなかった商品を品番ごとに集計（指示書Ver.2 §10）
+
   let placed = 0, failed = 0, overflowed = 0;
 
   units.forEach(code => {
@@ -1136,13 +1138,13 @@ function placeUnits(units, targetTruckId) {
         placed++; placedHere = true; overflowed++;
       }
     }
-    if (!placedHere) failed++;
+    if (!placedHere) { failed++; failedByCode[code] = (failedByCode[code] || 0) + 1; }
   });
 
   renderProductList();
   renderCanvases();
   saveToLocal();
-  return { placed, failed, overflowed };
+  return { placed, failed, overflowed, failedByCode };
 }
 
 /** 同一品番で積み余地がある配置のうち最も前方(小x)のものを返す（truckIdを指定するとそのトラック内のみ対象） */
@@ -1158,13 +1160,37 @@ function frontmostStackable(code, maxStack, truckId) {
 
 /** placeUnits の結果を伝えるトースト文言（②はみ出し許容の注記を含む） */
 function placeResultToast(prefix, r) {
-  if (r.overflowed > 0) {
+  if (r.failed > 0) {
+    showResidualWarning(r);   // 積み切れなかった商品を品番ごとに一覧表示（指示書Ver.2 §10）
+  } else if (r.overflowed > 0) {
     toast(`${prefix}${r.placed}個を配置（うち${r.overflowed}個ははみ出しあり・要確認）`);
-  } else if (r.failed > 0) {
-    toast(`${prefix}${r.placed}個を配置。${r.failed}個は配置できませんでした`);
   } else {
     toast(`${prefix}${r.placed}個を配置しました`);
   }
+}
+
+/** 最後まで積んだ上でなお積み切れなかった商品を、品番・数量つきで警告表示する（指示書Ver.2 §10） */
+function showResidualWarning(r) {
+  const rows = Object.entries(r.failedByCode || {}).map(([code, qty]) => {
+    const info = productInfo(code);
+    const label = (info && info.isMaterial) ? info.name : code;
+    return `<div class="residual-row"><span class="residual-code">${label}</span><span class="residual-qty">×${qty}</span></div>`;
+  }).join('');
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  mask.innerHTML = `
+    <div class="modal">
+      <h3>⚠ 商品が残っています</h3>
+      <p class="modal-message">最大限積み込みましたが、積載できなかった商品があります。</p>
+      <div class="residual-list">${rows}</div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" data-ok>確認しました</button>
+      </div>
+    </div>`;
+  const close = () => mask.remove();
+  mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+  mask.querySelector('[data-ok]').addEventListener('click', close);
+  document.body.appendChild(mask);
 }
 
 /** 全体を自動配置（残数ぶん） */

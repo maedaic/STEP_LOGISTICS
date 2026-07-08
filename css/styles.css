@@ -353,8 +353,10 @@ input, textarea { font-family: inherit; }
   position: absolute; top: 2px; left: 3px; font-size: 9px; font-weight: 800;
   background: rgba(0,0,0,.10); color: inherit; border-radius: 3px; padding: 0 4px; line-height: 1.4;
 }
-/* 当たり判定: 重なる位置は赤枠で配置不可を明示 */
+/* 当たり判定: ドラッグ中の重なりは赤枠で「このまま離すと干渉」を明示（配置自体はブロックしない） */
 .placement.collide { border-color: #dc2626 !important; background: rgba(220,38,38,.14) !important; color: #dc2626 !important; }
+/* ドラッグ中に荷台外へ出ている間の一時的な表示（離した時点で荷台内へ戻される） */
+.placement.oob-drag { opacity: .55; border-style: dashed; }
 
 /* 側面図：段積み表示（CENTER-009）。外枠は透明にし、各段(.placement-tier)で境界を表現 */
 .placement.placement-stack {
@@ -482,6 +484,12 @@ input, textarea { font-family: inherit; }
 .modal .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .modal-message { font-size: 13px; color: var(--text-sub); line-height: 1.7; margin: 0; }
+/* 積み残し警告（指示書Ver.2 §10） */
+.residual-list { margin-top: 12px; max-height: 240px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.residual-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line-2); }
+.residual-row:last-child { border-bottom: none; }
+.residual-code { font-weight: 700; font-size: 14px; color: #9a5b00; }
+.residual-qty { font-weight: 700; font-size: 13px; color: var(--text-sub); }
 .btn-danger { background: #dc2626; border-color: #dc2626; color: #fff; }
 .btn-danger:hover { background: #b91c1c; }
 
