@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "source": "社内資料「ステップ車輌 荷台の寸法」（手書き表・画像共有）＋ 業者トラック一般値",
+    "collectedAt": "2026-07-08",
+    "scope": "STEP自社車両（デュトロ各車・エルフ・小トラ・ボンゴ）＋ 業者委託トラック（4t・2t箱車・2t平ボディ・10t）",
+    "vehicleCount": 12,
+    "sizeNote": "cargoLength/cargoWidth/cargoHeight は荷台内寸(mm)。D(長さ)×W(幅)×H(高さ)表記に対応。車両外寸・積載量目安はUIから撤去済みのため保持していない。",
+    "fieldNotes": {
+      "group": "'step'＝STEP自社車両（同一車両は同時に1台のみ選択・ON/OFF切替）／'gaisha'＝業者委託車両（クリックごとに複数追加可）。",
+      "external": "true＝業者委託車両（他社手配・都度追加）。",
+      "placeholder": "true＝将来追加枠。実データなし・選択不可（「その他」）。",
+      "estimated": "true＝実測未確認の暫定値。正確な値が判明次第このファイルを更新すること。"
+    },
+    "unconfirmed": "デュトロ⑤・デュトロ⑥は社内資料の該当欄が黒塗り（未開示）のため実測未確認。10t箱車は社内資料に記載がなくメーカー一般値を暫定採用。2t箱車・2t平ボディは資料に「車種によって寸法が違う事があるので事前確認」と注記あり。",
+    "usedBy": ["STEP Studio Logistics（配送レイアウトシステム）"]
+  },
+  "vehicles": [
+    { "id": "dutro3",       "group": "step",   "name": "（小）デュトロ③", "cargoLength": 4500, "cargoWidth": 2050, "cargoHeight": 2150 },
+    { "id": "dutro2",       "group": "step",   "name": "デュトロ②",       "cargoLength": 5500, "cargoWidth": 2050, "cargoHeight": 2150 },
+    { "id": "dutro5",       "group": "step",   "name": "デュトロ⑤",       "cargoLength": 4360, "cargoWidth": 2060, "cargoHeight": 2070, "estimated": true },
+    { "id": "dutro6",       "group": "step",   "name": "デュトロ⑥",       "cargoLength": 4360, "cargoWidth": 2060, "cargoHeight": 2070, "estimated": true },
+    { "id": "elf",          "group": "step",   "name": "エルフ",           "cargoLength": 4200, "cargoWidth": 2050, "cargoHeight": 2150 },
+    { "id": "kotora",       "group": "step",   "name": "小トラ",           "cargoLength": 3000, "cargoWidth": 1550, "cargoHeight": 2200 },
+    { "id": "bongo",        "group": "step",   "name": "ボンゴ",           "cargoLength": 2500, "cargoWidth": 1550, "cargoHeight": 1920 },
+    { "id": "box4t",        "group": "gaisha", "name": "4t（フルワイド）", "cargoLength": 6200, "cargoWidth": 2350, "cargoHeight": 2300, "external": true },
+    { "id": "box2tbox",     "group": "gaisha", "name": "2t箱車",           "cargoLength": 4200, "cargoWidth": 2000, "cargoHeight": 2100, "external": true, "estimated": true },
+    { "id": "box2tflat",    "group": "gaisha", "name": "2t平ボディ",       "cargoLength": 4200, "cargoWidth": 2000, "cargoHeight": 2200, "external": true, "estimated": true },
+    { "id": "box10t",       "group": "gaisha", "name": "10t箱車",          "cargoLength": 9500, "cargoWidth": 2300, "cargoHeight": 2400, "external": true, "estimated": true },
+    { "id": "gaisha_other", "group": "gaisha", "name": "その他",           "placeholder": true }
+  ]
+}

@@ -1,12 +1,19 @@
 /* =========================================================================
- * data.js — マスターデータ（トラック / 商品）
+ * data.js — マスターデータ（トラック / 商品）※アプリ実行時に使う実体
  *
  * すべて実寸(mm)・実重(kg)で保持する。UIはこの実寸データの可視化にすぎない。
- * 現場でサイズ調整が必要な場合はこのファイルの数値を編集するだけでよい。
+ *
+ * ★正本（Source of Truth）は data/ 配下のJSONファイル：
+ *     data/vehicle-master.json  ← TRUCK_MASTER の正本
+ *     data/product-master.json  ← PRODUCT_MASTER の正本（STEP Studio全体で共通利用）
+ *   将来「Settings」モジュールが持つ共通マスターの土台となる想定のため、
+ *   実寸の追加・修正はまず data/*.json 側を直し、このファイルへ反映すること。
+ *   このファイルには、アプリ描画専用の追加項目（color, group, viewMode用の
+ *   external/placeholder フラグ等）が乗っている点でJSONそのものとは異なる。
  * ======================================================================= */
 
 /**
- * トラックマスター
+ * トラックマスター（正本: data/vehicle-master.json）
  * group   : 'step'（STEP車両）| 'gaisha'（業者トラック）
  * cargo*  : 荷台内寸(mm)   ← レイアウト描画・寸法表示(D/W/H)の基準
  *           D=cargoLength（長さ/奥行）, W=cargoWidth（幅）, H=cargoHeight（高さ）
@@ -15,7 +22,7 @@
  *
  * ※ 積載量目安・車外寸はUI表示から廃止（荷台寸法のみ表示）。
  * ※ 荷台内寸が実測で未確定のものは estimated:true を付けている。
- *    正確な値が分かり次第このファイルを更新すること。
+ *    正確な値が分かり次第このファイルと data/vehicle-master.json の両方を更新すること。
  */
 const TRUCK_MASTER = [
   // ---- STEP車両（荷台実寸: 画像②「ステップ車輌 荷台の寸法」2026-07-08 反映）----
@@ -40,18 +47,19 @@ const TRUCK_MASTER = [
 ];
 
 /**
- * 商品マスター
+ * 商品マスター（正本: data/product-master.json — STEP Studio全体で共通利用）
  * width  : 幅(mm)    → 上面図では荷台の長さ方向(X)に描画
  * depth  : 奥行(mm)  → 上面図では荷台の幅方向(Y)に描画
  * height : 高さ(mm)  → 側面図で使用
- * color  : 描画色（カテゴリ別の識別色）
+ * color  : 描画色（カテゴリ別の識別色。アプリ描画専用でJSON側には無い）
  * price  : レンタル最低料金（税込・円）
  * glass  : ガラス什器か
+ * folded : 展開⇄折りたたみ切替対応商品の折りたたみ時の実寸（例: C24C）
  * weight / stackable : 公開ページ未記載のため null（推測補完なし）
  *
  * 出典: 株式会社ステップ https://www.kk-step.jp/ （2026-07-08 取得）
- * 元データは data/product-master.json（STEP Studio共通マスター）。
- * ここはレイアウトシステムが直接使う実寸コピー。詳細は共通マスター側を参照。
+ * ここはレイアウトシステムが直接使う実寸コピー。追加・修正はまず
+ * data/product-master.json を直し、その後このファイルへ反映すること。
  */
 const PRODUCT_MASTER = [
   // 宝飾スタンダードケース
