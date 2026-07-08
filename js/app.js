@@ -20,6 +20,7 @@ let state = {
   manual: [],      // 手入力 { id, code, qty, def:null|{name,width,depth,height,color} }
   products: [],    // ★導出（slips.items + manual を品番で集計）{ code, name, width, depth, height, qty, color }
   placements: [],  // { id, truckInstanceId, code, x, y, rotation }
+  productModes: {},  // 折りたたみ対応商品の状態 { code: 'folded' | 'unfolded' }（③C24C等）
 };
 
 let pickedCode = null;   // クリック配置用に選択中の品番
@@ -200,6 +201,18 @@ function mergeManualDuplicates() {
  *   商品一覧 = アップロード伝票(slips)のOCR結果 ＋ 手入力(manual) を品番で合算。
  *   これにより「複数伝票で同じ品番」も自動集計され、伝票を削除すれば数量も戻る。
  * ------------------------------------------------------------------------- */
+/**
+ * 展開/折りたたみを切替可能な商品（③C24C等）の現在の実寸を返す。
+ * 初期値は「折りたたみ」。state.productModes[code] === 'unfolded' のときのみ展開寸を使う。
+ */
+function effectiveMasterDims(master) {
+  if (!master.folded) return { width: master.width, depth: master.depth, height: master.height };
+  const mode = state.productModes[master.code] || 'folded';
+  return mode === 'unfolded'
+    ? { width: master.width, depth: master.depth, height: master.height }
+    : { width: master.folded.width, depth: master.folded.depth, height: master.folded.height };
+}
+
 function rebuildProducts() {
   mergeManualDuplicates();   // 過去に分かれて保存された同一品番の手入力行を統合（自己修復）
 
@@ -218,7 +231,8 @@ function rebuildProducts() {
   agg.forEach((v, code) => {
     const master = getProductMaster(code);
     if (master) {
-      products.push({ code, name: master.name, width: master.width, depth: master.depth, height: master.height, qty: v.qty, color: master.color, stackable: master.stackable, maxStack: master.maxStack });
+      const dims = effectiveMasterDims(master);
+      products.push({ code, name: master.name, width: dims.width, depth: dims.depth, height: dims.height, qty: v.qty, color: master.color, stackable: master.stackable, maxStack: master.maxStack, foldable: !!master.folded });
     } else if (v.def) {
       products.push({ code, name: v.def.name, width: v.def.width, depth: v.def.depth, height: v.def.height, qty: v.qty, color: v.def.color, stackable: null, maxStack: 1 });
     } else {
@@ -228,6 +242,16 @@ function rebuildProducts() {
   });
   state.products = products;
   trimExcessPlacements();
+}
+
+/** ③展開⇄折りたたみを切り替える（C24C等）。既存の配置も見た目に反映される */
+function setFoldMode(code, mode) {
+  if (state.productModes[code] === mode) return;
+  state.productModes[code] = mode;
+  rebuildProducts();
+  renderProductList();
+  renderCanvases();
+  saveToLocal();
 }
 
 /** 集計後、数量が配置数(段数含む)を下回った品番は新しい配置/段から取り消す（伝票削除時の整合） */
@@ -298,12 +322,23 @@ function buildProductRow(code, qtyInSource) {
   row.className = 'product-row' + (pickedCode === code ? ' is-picked' : '');
   row.setAttribute('draggable', 'true');
   row.dataset.code = code;
+
+  // ③展開⇄折りたたみトグル（対応商品のみ・初期値は折りたたみ）
+  const isFoldable = !!(info.foldable || info.folded);
+  const foldMode = state.productModes[code] || 'folded';
+  const foldToggle = isFoldable ? `
+    <div class="pr-fold">
+      <button class="fold-btn ${foldMode === 'folded' ? 'is-on' : ''}" data-fold="folded">折りたたみ</button>
+      <button class="fold-btn ${foldMode === 'unfolded' ? 'is-on' : ''}" data-fold="unfolded">展開</button>
+    </div>` : '';
+
   row.innerHTML = `
     <div class="pr-top">
       <span class="pr-code">${code}</span>
       <span class="pr-qty">×${qtyInSource}</span>
     </div>
     <div class="pr-name">${info.name}　${info.width}×${info.depth}×${info.height}</div>
+    ${foldToggle}
     <div class="pr-remain ${rem <= 0 ? 'is-zero' : ''}">残${rem}</div>`;
   row.addEventListener('click', () => {
     pickedCode = (pickedCode === code) ? null : code;
@@ -313,6 +348,14 @@ function buildProductRow(code, qtyInSource) {
     e.dataTransfer.setData('text/plain', code);
     e.dataTransfer.effectAllowed = 'copy';
   });
+  if (isFoldable) {
+    row.querySelectorAll('.fold-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();   // 行のクリック（品番選択）を誘発しない
+        setFoldMode(code, btn.dataset.fold);
+      });
+    });
+  }
   return row;
 }
 
@@ -395,7 +438,9 @@ function renderCanvases() {
   state.trucks.forEach((t, idx) => {
     const m = truckDims(t);
     const mode = t.viewMode || 'top';
-    const hasPlace = state.placements.some(p => p.truckInstanceId === t.instanceId);
+    const truckPlacements = state.placements.filter(p => p.truckInstanceId === t.instanceId);
+    const hasPlace = truckPlacements.length > 0;
+    const hasOOB = truckPlacements.some(p => isPlacementOOB(p, m));   // ②はみ出し警告
     const block = document.createElement('div');
     block.className = 'truck-block';
     block.innerHTML = `
@@ -413,6 +458,7 @@ function renderCanvases() {
         荷台内寸: <b>${cargoDWH(m)} mm</b>
         ${m.estimated ? '<span class="tb-est">※暫定値</span>' : ''}
       </div>
+      ${hasOOB ? '<div class="tb-oob-warning">⚠ 商品が荷台からはみ出しています。配置を確認してください。</div>' : ''}
       <div class="dir-note">◀ 前方（運転席）：この向きが進行方向</div>
       <div class="canvas-wrap">
         <div class="truck-cab" title="前方（運転席）">
@@ -473,7 +519,9 @@ function buildPlacementEl(p, truck, scale) {
   const info = productInfo(p.code);
   const fp = footprint(info, p.rotation);
   const el = document.createElement('div');
-  el.className = 'placement' + (selectedPid === p.id ? ' is-selected' : '');
+  const oob = isPlacementOOB(p, truck);   // ②自動配置改善：はみ出し配置を視覚的に明示
+  el.className = 'placement' + (selectedPid === p.id ? ' is-selected' : '') + (oob ? ' out-of-bounds' : '');
+  if (oob) el.title = '荷台からはみ出しています';
   el.dataset.pid = p.id;
 
   const wpx = fp.lenX * scale;
@@ -693,9 +741,13 @@ function pruneContainedRects(rects) {
     (a.w * a.h < b.w * b.h || (a.w * a.h === b.w * b.h && i > j))));
 }
 
-/** そのトラックの現在の空き長方形群を、既存の配置を差し引いて算出する */
-function computeFreeRects(t, m) {
-  let free = [{ x: 0, y: 0, w: m.cargoLength, h: m.cargoWidth }];
+/**
+ * そのトラックの現在の空き長方形群を、既存の配置を差し引いて算出する。
+ * extraLen/extraWid を指定すると、荷台の実サイズより広い仮想領域で計算する
+ * （②自動配置改善：本来のスペースでは入らない商品を、はみ出し許容で置くためのフォールバック用）。
+ */
+function computeFreeRects(t, m, extraLen = 0, extraWid = 0) {
+  let free = [{ x: 0, y: 0, w: m.cargoLength + extraLen, h: m.cargoWidth + extraWid }];
   state.placements.filter(p => p.truckInstanceId === t.instanceId).forEach(p => {
     const occ = boxRect(p);
     let next = [];
@@ -706,23 +758,34 @@ function computeFreeRects(t, m) {
 }
 
 /**
- * 空き長方形群の中から、商品(0°/90°)が収まる最も無駄の少ない置き場所を選ぶ
- * （Best Short Side Fit：はみ出した余白の短辺が最小＝最もフィットする空きを優先）。
- * 同点なら前方(小x)・左(小y)を優先し、前方の空きから順に詰まっていくようにする。
+ * 空き長方形群の中から商品(0°/90°)を置く場所を選ぶ（AUTO-001/002/008）。
+ * 優先順位は仕様の「配置優先順位」に対応：
+ *   ① 前方(小x)を最優先 → ② 前面を埋める(小y)を次点 → ③ 同じ位置なら最もフィットする向き
+ * 積載率の最大化より、前方から順に詰まっていく分かりやすさを優先する。
  */
 function bestFreeRectFit(freeRects, fp0, fp90) {
   let best = null;
   freeRects.forEach(r => {
+    let bestForRect = null;
     [[fp0, 0], [fp90, 90]].forEach(([fp, rot]) => {
       if (fp.lenX > r.w + 0.5 || fp.lenY > r.h + 0.5) return;
       const shortSide = Math.min(r.w - fp.lenX, r.h - fp.lenY);
-      if (!best || shortSide < best.shortSide - 0.5 ||
-          (Math.abs(shortSide - best.shortSide) <= 0.5 && (r.x < best.x - 0.5 || (Math.abs(r.x - best.x) <= 0.5 && r.y < best.y)))) {
-        best = { x: r.x, y: r.y, rot, fp, shortSide };
-      }
+      if (!bestForRect || shortSide < bestForRect.shortSide) bestForRect = { rot, fp, shortSide };
     });
+    if (!bestForRect) return;
+    if (!best || r.x < best.x - 0.5 ||
+        (Math.abs(r.x - best.x) <= 0.5 && r.y < best.y - 0.5) ||
+        (Math.abs(r.x - best.x) <= 0.5 && Math.abs(r.y - best.y) <= 0.5 && bestForRect.shortSide < best.shortSide)) {
+      best = { x: r.x, y: r.y, rot: bestForRect.rot, fp: bestForRect.fp, shortSide: bestForRect.shortSide };
+    }
   });
   return best;
+}
+
+/** 配置が荷台からはみ出しているか（②自動配置改善：はみ出し警告のため） */
+function isPlacementOOB(p, m) {
+  const r = boxRect(p);
+  return r.x < -0.5 || r.y < -0.5 || r.x + r.w > m.cargoLength + 0.5 || r.y + r.h > m.cargoWidth + 0.5;
 }
 
 /* -------- 配置不可トースト -------- */
@@ -837,6 +900,10 @@ function flashNoStock(code) {
  *  phase5: 二段積み可能品（C6等）は新規フットプリントを使わず、前方の既存プレースへ積み増す
  *          （＝隙間を作らず上段へ乗せる。§CENTER-003）
  *
+ * ②自動配置改善: 荷台内に収まる場所が本当にどこにもない場合、配置を諦めるのではなく
+ *   はみ出しを許容して先頭トラックへ置く（商品は必ず置かれる）。はみ出した配置は
+ *   renderCanvases側でトラックごとに警告バナーを表示する（isPlacementOOB）。
+ *
  * units: 積む品番の配列（呼び出し側が在庫内に収める）
  */
 function placeUnits(units) {
@@ -848,7 +915,7 @@ function placeUnits(units) {
     return (ib.height - ia.height) || (ib.width * ib.depth - ia.width * ia.depth);
   });
 
-  let placed = 0, failed = 0;
+  let placed = 0, failed = 0, overflowed = 0;
 
   units.forEach(code => {
     const info = productInfo(code);
@@ -876,13 +943,27 @@ function placeUnits(units) {
         break;   // このトラックに置けたので次のトラックは試さない（前方＝先頭トラックから埋める）
       }
     }
+
+    // ②フォールバック: どのトラックにも収まる場所が無ければ、先頭トラックへ
+    // はみ出しを許容して置く（配置を諦めない。警告表示は描画側で行う）
+    if (!placedHere && state.trucks.length > 0) {
+      const t = state.trucks[0];
+      const m = truckDims(t);
+      const margin = Math.max(fp0.lenX, fp0.lenY, fp90.lenX, fp90.lenY) + 50;
+      const free = computeFreeRects(t, m, margin, margin);
+      const best = bestFreeRectFit(free, fp0, fp90);
+      if (best) {
+        state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
+        placed++; placedHere = true; overflowed++;
+      }
+    }
     if (!placedHere) failed++;
   });
 
   renderProductList();
   renderCanvases();
   saveToLocal();
-  return { placed, failed };
+  return { placed, failed, overflowed };
 }
 
 /** 同一品番で積み余地がある配置のうち最も前方(小x)のものを返す */
@@ -896,6 +977,17 @@ function frontmostStackable(code, maxStack) {
   return best;
 }
 
+/** placeUnits の結果を伝えるトースト文言（②はみ出し許容の注記を含む） */
+function placeResultToast(prefix, r) {
+  if (r.overflowed > 0) {
+    toast(`${prefix}${r.placed}個を配置（うち${r.overflowed}個ははみ出しあり・要確認）`);
+  } else if (r.failed > 0) {
+    toast(`${prefix}${r.placed}個を配置。${r.failed}個は配置できませんでした`);
+  } else {
+    toast(`${prefix}${r.placed}個を配置しました`);
+  }
+}
+
 /** 全体を自動配置（残数ぶん） */
 function autoPlaceAll() {
   const units = [];
@@ -903,7 +995,7 @@ function autoPlaceAll() {
   if (units.length === 0) { toast('配置する残数がありません'); return; }
   const r = placeUnits(units);
   if (r.noTruck) return;
-  toast(r.failed > 0 ? `${r.placed}個を配置。${r.failed}個は空き不足で未配置` : `${r.placed}個を自動配置しました`);
+  placeResultToast('', r);
 }
 
 /** 指定した伝票のみ自動配置（RIGHT-004）。在庫(残)の範囲で積む */
@@ -921,7 +1013,7 @@ function autoPlaceSlip(slipId) {
   if (units.length === 0) { toast('この伝票に積める残数がありません'); return; }
   const r = placeUnits(units);
   if (r.noTruck) return;
-  toast(r.failed > 0 ? `伝票から${r.placed}個を配置。${r.failed}個は空き不足` : `伝票から${r.placed}個を配置しました`);
+  placeResultToast('伝票から', r);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1078,17 +1170,24 @@ function clearAllPlacements() {
   const isEmpty = state.trucks.length === 0 && state.slips.length === 0 &&
     state.manual.length === 0 && state.placements.length === 0;
   if (isEmpty) { toast('削除するデータがありません'); return; }
-  if (!confirm('全て削除しますか？\nトラック配置・OCR結果・伝票・手入力商品を全て削除します。この操作は元に戻せません。')) return;
 
-  state.slips.forEach(s => { if (s.thumbUrl) { try { URL.revokeObjectURL(s.thumbUrl); } catch (_) {} } });
-  state.trucks = [];
-  state.slips = [];
-  state.manual = [];
-  state.products = [];
-  state.placements = [];
-  pickedCode = null;
-  selectedPid = null;
-  renderAll();
+  confirmDanger(
+    'すべて削除しますか？',
+    'トラック配置・OCR結果・伝票・手入力商品を全て削除します。<br>この操作は元に戻せません。',
+    '全て削除',
+    () => {
+      state.slips.forEach(s => { if (s.thumbUrl) { try { URL.revokeObjectURL(s.thumbUrl); } catch (_) {} } });
+      state.trucks = [];
+      state.slips = [];
+      state.manual = [];
+      state.products = [];
+      state.placements = [];
+      state.productModes = {};
+      pickedCode = null;
+      selectedPid = null;
+      renderAll();
+    }
+  );
 }
 
 /* トラック毎に配置消去（CENTER-006）: そのトラックの配置だけ初期化 */
@@ -1178,7 +1277,7 @@ function openTruckPicker() {
 }
 
 /* 汎用モーダル */
-function openModal(title, bodyHtml, onOk) {
+function openModal(title, bodyHtml, onOk, okLabel) {
   const mask = document.createElement('div');
   mask.className = 'modal-mask';
   mask.innerHTML = `
@@ -1187,13 +1286,33 @@ function openModal(title, bodyHtml, onOk) {
       ${bodyHtml}
       <div class="modal-actions">
         <button class="btn" data-cancel>キャンセル</button>
-        <button class="btn btn-primary" data-ok>追加</button>
+        <button class="btn btn-primary" data-ok>${okLabel || '追加'}</button>
       </div>
     </div>`;
   const close = () => mask.remove();
   mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
   mask.querySelector('[data-cancel]').addEventListener('click', close);
   mask.querySelector('[data-ok]').addEventListener('click', () => { if (onOk() !== false) close(); });
+  document.body.appendChild(mask);
+}
+
+/** 破壊的操作用の確認ダイアログ（キャンセル / 危険な操作ボタン）。confirm()の代わりに使う */
+function confirmDanger(title, message, dangerLabel, onConfirm) {
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  mask.innerHTML = `
+    <div class="modal">
+      <h3>${title}</h3>
+      <p class="modal-message">${message}</p>
+      <div class="modal-actions">
+        <button class="btn" data-cancel>キャンセル</button>
+        <button class="btn btn-danger" data-ok>${dangerLabel}</button>
+      </div>
+    </div>`;
+  const close = () => mask.remove();
+  mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+  mask.querySelector('[data-cancel]').addEventListener('click', close);
+  mask.querySelector('[data-ok]').addEventListener('click', () => { onConfirm(); close(); });
   document.body.appendChild(mask);
 }
 
@@ -1210,6 +1329,7 @@ function serialize() {
     slips: state.slips.map(s => ({ id: s.id, name: s.name, isImage: s.isImage, items: s.items })),
     manual: state.manual,
     placements: state.placements,
+    productModes: state.productModes,   // ③展開/折りたたみの選択状態
   };
 }
 function saveToLocal() {
@@ -1241,8 +1361,9 @@ function hydrate(obj) {
   }
   state.placements = (obj.placements || []).map(p => ({
     id: p.id || uid('p'), truckInstanceId: p.truckInstanceId, code: p.code,
-    x: p.x || 0, y: p.y || 0, rotation: p.rotation || 0,
+    x: p.x || 0, y: p.y || 0, rotation: p.rotation || 0, stack: p.stack || 1,
   }));
+  state.productModes = obj.productModes || {};
   rebuildProducts();
 }
 function saveProjectFile() {

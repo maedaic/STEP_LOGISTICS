@@ -118,7 +118,10 @@ const PRODUCT_MASTER = [
   { code: 'C1C',     name: 'ガラスケース W1200',            category: 'ガラスケース', width: 1200, depth: 500, height: 940, price: 14300, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9' },
   { code: 'C2C',     name: 'ガラスケース W1500',            category: 'ガラスケース', width: 1500, depth: 500, height: 940, price: 14300, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9' },
   { code: 'C3C',     name: 'ガラスケース W1800',            category: 'ガラスケース', width: 1800, depth: 500, height: 940, price: 16500, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9' },
-  { code: 'C24C',    name: 'ガラスケース(折りたたみ式)',    category: 'ガラスケース', width: 1500, depth: 600, height: 900, price: 11000, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9' },
+  // width/depth/height＝展開状態の実寸。folded＝折りたたみ状態の実寸（2026-07-08 確認済み）。
+  // 初期値は「折りたたみ」（Sprint UI改善 ③）。
+  { code: 'C24C',    name: 'ガラスケース(折りたたみ式)',    category: 'ガラスケース', width: 1500, depth: 600, height: 900, price: 11000, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9',
+    folded: { width: 1500, depth: 220, height: 910 } },
   { code: 'CT1',     name: '卓上ケース',                    category: 'ガラスケース', width: 600,  depth: 310, height: 435, price: 5500,  weight: null, stackable: null, maxStack: 1, glass: true, color: '#0ea5e9' },
   // ガラスハイケース
   { code: 'C90C',    name: 'ガラスハイケース W900',         category: 'ガラスハイケース', width: 900,  depth: 500, height: 1500, price: 19800, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0284c7' },

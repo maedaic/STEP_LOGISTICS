@@ -244,6 +244,11 @@ input, textarea { font-family: inherit; }
 .tb-dims { font-size: 12px; color: var(--text-sub); margin: 8px 0 4px; }
 .tb-dims b { color: var(--text); }
 .tb-est { color: var(--amber); font-size: 11px; margin-left: 6px; }
+/* ②自動配置改善：はみ出し警告バナー */
+.tb-oob-warning {
+  background: #fff4e5; border: 1px solid #f3c98b; color: #9a5b00;
+  font-size: 12px; font-weight: 700; padding: 8px 12px; border-radius: 7px; margin-bottom: 6px;
+}
 
 /* ---------------- 進行方向の注記 ---------------- */
 .dir-note { font-size: 11px; color: var(--text-sub); margin: 2px 0 6px; font-weight: 600; }
@@ -259,7 +264,7 @@ input, textarea { font-family: inherit; }
 .ruler-y { display: none; }  /* 幅はヘッダのWで表記するため非表示 */
 .cargo {
   position: relative; border: 2px solid #cfd6e0; border-radius: 4px;
-  background: #fff; overflow: hidden;
+  background: #fff; overflow: visible;   /* はみ出し配置(②)も見えるようクリップしない */
 }
 .cargo.grid-on {
   background-image:
@@ -292,15 +297,20 @@ input, textarea { font-family: inherit; }
 }
 .placement:active { cursor: grabbing; }
 .placement.dragging { z-index: 20; box-shadow: 0 6px 16px rgba(0,0,0,.18); }
-.placement .p-code { font-size: 13px; font-weight: 800; line-height: 1.1; }
-.placement .p-size { font-size: 9px; font-weight: 600; opacity: .8; }
+/* ④商品アイコン改善: 商品名を大きく・削除ボタンをタップしやすいサイズへ */
+.placement .p-code { font-size: 16px; font-weight: 800; line-height: 1.15; }
+.placement .p-size { font-size: 10px; font-weight: 600; opacity: .8; }
 .placement .p-dots { position: absolute; top: 3px; left: 4px; font-size: 8px; letter-spacing: 1px; opacity: .7; }
 .placement .p-remove {
-  position: absolute; top: 1px; right: 3px; font-size: 12px; line-height: 1;
-  color: inherit; opacity: 0; cursor: pointer;
+  position: absolute; top: 2px; right: 2px; z-index: 5;
+  width: 20px; height: 20px; min-width: 20px; min-height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; line-height: 1; border-radius: 50%;
+  color: inherit; background: rgba(255,255,255,.85);
+  opacity: .6; cursor: pointer;
 }
-.placement:hover .p-remove { opacity: .7; }
-.placement.out-of-bounds { border-style: dashed; }
+.placement:hover .p-remove, .placement .p-remove:active { opacity: 1; }
+.placement.out-of-bounds { border-style: dashed; box-shadow: 0 0 0 2px rgba(217,119,6,.35); }
 /* 選択中（Deleteキー対象）CENTER-008 */
 .placement.is-selected { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--blue); z-index: 15; }
 /* 二段積みバッジ CENTER-003 */
@@ -355,6 +365,13 @@ input, textarea { font-family: inherit; }
 .pr-code { font-size: 26px; font-weight: 800; line-height: 1; }
 .pr-qty { font-size: 11px; color: var(--text-sub); background: #f1f3f6; padding: 2px 8px; border-radius: 5px; }
 .pr-name { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+/* ③展開⇄折りたたみトグル（C24C等） */
+.pr-fold { display: flex; gap: 6px; margin-top: 6px; }
+.fold-btn {
+  border: 1px solid var(--line); background: #fff; color: var(--text-sub);
+  font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px;
+}
+.fold-btn.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
 .pr-remain { font-size: 13px; font-weight: 800; color: var(--blue); margin-top: 6px; }
 .pr-remain.is-zero { color: #c0392b; }
 .pr-del { position: absolute; right: 2px; bottom: 12px; border: none; background: transparent; color: var(--text-mut); font-size: 12px; }
@@ -419,6 +436,9 @@ input, textarea { font-family: inherit; }
 }
 .modal .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.modal-message { font-size: 13px; color: var(--text-sub); line-height: 1.7; margin: 0; }
+.btn-danger { background: #dc2626; border-color: #dc2626; color: #fff; }
+.btn-danger:hover { background: #b91c1c; }
 
 /* ---------------- 印刷（PDF出力） ---------------- */
 .print-area { display: none; }
