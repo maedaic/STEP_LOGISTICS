@@ -795,6 +795,17 @@ function attachCargoHandlers(cargo, truckInstance, m) {
   });
 
   // 既存商品の選択 / ドラッグ移動 / 回転 / 削除
+  /** クリック位置(mm座標)に重なっている、このトラック内の配置一覧を返す */
+  const overlappingAt = (e) => {
+    const rect = cargo.getBoundingClientRect();
+    const scale = parseFloat(cargo.dataset.scale);
+    const mmX = (e.clientX - rect.left) / scale;
+    const mmY = (e.clientY - rect.top) / scale;
+    return state.placements.filter(p =>
+      p.truckInstanceId === truckInstance.instanceId &&
+      rectsOverlap({ x: mmX, y: mmY, w: 1, h: 1 }, boxRect(p)));
+  };
+
   cargo.addEventListener('pointerdown', (e) => {
     const el = e.target.closest('.placement');
     if (!el) { if (selectedPid) { selectedPid = null; renderCanvases(); } return; }
@@ -802,17 +813,36 @@ function attachCargoHandlers(cargo, truckInstance, m) {
       removePlacement(el.dataset.pid);
       return;
     }
-    // クリックで選択（Deleteキー対象）。ハイライト更新
-    if (selectedPid !== el.dataset.pid) {
-      selectedPid = el.dataset.pid;
-      document.querySelectorAll('.placement.is-selected').forEach(x => x.classList.remove('is-selected'));
-      el.classList.add('is-selected');
+
+    // 干渉で重なった商品が複数ある場合、同じ場所を続けてクリックすると奥の商品へ
+    // 選択が順送りされる（重なって隠れた商品にも手が届くように）
+    let target = el;
+    const candidates = overlappingAt(e);
+    if (candidates.length > 1) {
+      const curIdx = candidates.findIndex(p => p.id === selectedPid);
+      if (curIdx !== -1) {
+        const next = candidates[(curIdx + 1) % candidates.length];
+        const nextEl = cargo.querySelector(`.placement[data-pid="${next.id}"]`);
+        if (nextEl) target = nextEl;
+      }
     }
-    startBoxDrag(e, el, cargo, truckInstance, m);
+
+    // クリックで選択（Deleteキー対象）。ハイライト更新
+    if (selectedPid !== target.dataset.pid) {
+      selectedPid = target.dataset.pid;
+      document.querySelectorAll('.placement.is-selected').forEach(x => x.classList.remove('is-selected'));
+      target.classList.add('is-selected');
+    }
+    startBoxDrag(e, target, cargo, truckInstance, m);
   });
   cargo.addEventListener('dblclick', (e) => {
     const el = e.target.closest('.placement');
-    if (el) rotatePlacement(el.dataset.pid);
+    if (!el) return;
+    // 選択中の商品がこの位置の重なりに含まれていれば、それを優先して回転する
+    // （クリックで奥の商品へ選択を切り替え済みの場合はその選択を尊重する）
+    const candidates = overlappingAt(e);
+    const preferred = candidates.find(p => p.id === selectedPid);
+    rotatePlacement(preferred ? preferred.id : el.dataset.pid);
   });
 }
 
@@ -978,14 +1008,23 @@ function startBoxDrag(e, el, cargo, truckInstance, m) {
   const startX = e.clientX, startY = e.clientY;
   const origX = p.x, origY = p.y;
   let curX = origX, curY = origY;
-  el.classList.add('dragging');
-  el.setPointerCapture(e.pointerId);
+  let dragging = false;
+  const DRAG_THRESHOLD = 4;   // px: これを超えて動くまでは「クリック／ダブルクリック」として扱う
 
   // ドラッグ中は荷台外へ出ることも他商品との重なりも一時的に許可する（指示書Ver.2 §7/§8）。
   // 位置調整のしやすさを優先し、可否判定は指を離した「配置確定」の瞬間にのみ行う。
+  // 実際に動くまで setPointerCapture しないのは、単純なクリック／ダブルクリック（回転）が
+  // ポインタキャプチャの影響でブラウザのdblclick判定を妨げないようにするため。
   const move = (ev) => {
-    curX = origX + (ev.clientX - startX) / scale;
-    curY = origY + (ev.clientY - startY) / scale;
+    const dx = ev.clientX - startX, dy = ev.clientY - startY;
+    if (!dragging) {
+      if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+      dragging = true;
+      el.classList.add('dragging');
+      el.setPointerCapture(e.pointerId);
+    }
+    curX = origX + dx / scale;
+    curY = origY + dy / scale;
     el.style.left = (curX * scale) + 'px';
     el.style.top = (curY * scale) + 'px';
     const rect = { x: curX, y: curY, w: fp.lenX, h: fp.lenY };
@@ -995,6 +1034,7 @@ function startBoxDrag(e, el, cargo, truckInstance, m) {
   const up = () => {
     el.removeEventListener('pointermove', move);
     el.removeEventListener('pointerup', up);
+    if (!dragging) return;   // 実際には動いていない＝単なるクリック。位置はそのまま
     el.classList.remove('dragging', 'collide', 'oob-drag');
 
     const rect = { x: curX, y: curY, w: fp.lenX, h: fp.lenY };
