@@ -532,17 +532,31 @@ function renderProductList() {
 
   // 伝票ごとにグループ表示（同一品番でも合算せず伝票単位を維持）
   state.slips.forEach((s, idx) => {
+    // 配置先トラックが削除済み/未設定なら先頭トラックへ自動修復（§4）
+    if (!state.trucks.find(t => t.instanceId === s.targetTruckId)) {
+      s.targetTruckId = (state.trucks[0] && state.trucks[0].instanceId) || null;
+    }
     const group = document.createElement('div');
     group.className = 'ocr-group';
     const head = document.createElement('div');
     head.className = 'ocr-group-head';
     head.innerHTML = `<span class="ocr-group-title">伝票${idx + 1}</span>
       <span class="ocr-group-name">${s.name}</span>
-      <button class="ocr-group-place" title="この伝票だけ自動配置">伝票のみ反映</button>
       <button class="ocr-group-del" title="この伝票を削除">削除</button>`;
-    head.querySelector('.ocr-group-place').addEventListener('click', () => autoPlaceSlip(s.id));
     head.querySelector('.ocr-group-del').addEventListener('click', () => removeSlip(s.id));
     group.appendChild(head);
+
+    // 配置先トラック選択＋トラック配置ボタン（見出しとは別行に分けて折り返しを防ぐ）§4
+    const truckOpts = state.trucks.map(t => `<option value="${t.instanceId}" ${t.instanceId === s.targetTruckId ? 'selected' : ''}>${truckLabel(t)}</option>`).join('');
+    const placeRow = document.createElement('div');
+    placeRow.className = 'ocr-group-placerow';
+    placeRow.innerHTML = `
+      ${state.trucks.length > 1 ? `<select class="ocr-group-truck" title="この伝票の配置先トラック">${truckOpts}</select>` : ''}
+      <button class="ocr-group-place" title="この伝票の商品だけを配置先トラックへ積む" ${state.trucks.length === 0 ? 'disabled' : ''}>トラック配置</button>`;
+    const truckSelectEl = placeRow.querySelector('.ocr-group-truck');
+    if (truckSelectEl) truckSelectEl.addEventListener('change', (e) => { s.targetTruckId = e.target.value; saveToLocal(); });
+    placeRow.querySelector('.ocr-group-place').addEventListener('click', () => autoPlaceSlip(s.id));
+    group.appendChild(placeRow);
     if ((s.items || []).length === 0) {
       const none = document.createElement('div');
       none.className = 'ocr-empty';
@@ -1064,8 +1078,15 @@ function flashNoStock(code) {
  *
  * units: 積む品番の配列（呼び出し側が在庫内に収める）
  */
-function placeUnits(units) {
+/**
+ * 商品コード配列(units)をトラックへ自動配置する。
+ * targetTruckId を指定すると、そのトラック1台だけに配置する（伝票単位の「トラック配置」§4）。
+ * 省略時は従来どおり全トラックを前方（先頭）から順に試す（全体自動配置）。
+ */
+function placeUnits(units, targetTruckId) {
   if (state.trucks.length === 0) { toast('先にトラックを選択してください'); return { placed: 0, failed: 0, noTruck: true }; }
+  const pool = targetTruckId ? state.trucks.filter(t => t.instanceId === targetTruckId) : state.trucks;
+  if (pool.length === 0) { toast('配置先のトラックが見つかりません'); return { placed: 0, failed: 0, noTruck: true }; }
 
   // phase1: 高さ降順 → 同高はフットプリント大きい順
   units.sort((a, b) => {
@@ -1078,19 +1099,19 @@ function placeUnits(units) {
   units.forEach(code => {
     const info = productInfo(code);
 
-    // phase5: 二段積み可能品は前方の既存プレースへ積み増す（新しい床面積を使わない）
+    // phase5: 二段積み可能品は前方の既存プレースへ積み増す（新しい床面積を使わない・配置先候補内のみ）
     if (canStack(info)) {
-      const target = frontmostStackable(code, info.maxStack || 1);
+      const target = frontmostStackable(code, info.maxStack || 1, targetTruckId);
       if (target) { target.stack = (target.stack || 1) + 1; placed++; return; }
     }
 
-    // phase2〜4: トラックを前方（先頭）から順に試し、そのトラックの空き長方形の中から
-    //            最もフィットする場所へ詰める（＝隙間を残さない配置を優先）
+    // phase2〜4: 配置先候補（全トラック or 指定トラックのみ）を前方から順に試し、
+    //            その中の空き長方形から最もフィットする場所へ詰める（＝隙間を残さない配置を優先）
     const fp0 = footprint(info, 0);
     const fp90 = footprint(info, 90);
     let placedHere = false;
 
-    for (const t of state.trucks) {
+    for (const t of pool) {
       const m = truckDims(t);
       const free = computeFreeRects(t, m);
       const best = bestFreeRectFit(free, fp0, fp90);
@@ -1098,14 +1119,14 @@ function placeUnits(units) {
       if (best) {
         state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
         placed++; placedHere = true;
-        break;   // このトラックに置けたので次のトラックは試さない（前方＝先頭トラックから埋める）
+        break;   // 置けたので次の候補トラックは試さない（前方＝先頭から埋める）
       }
     }
 
-    // ②フォールバック: どのトラックにも収まる場所が無ければ、先頭トラックへ
+    // ②フォールバック: 候補トラックのどれにも収まる場所が無ければ、先頭候補へ
     // はみ出しを許容して置く（配置を諦めない。警告表示は描画側で行う）
-    if (!placedHere && state.trucks.length > 0) {
-      const t = state.trucks[0];
+    if (!placedHere && pool.length > 0) {
+      const t = pool[0];
       const m = truckDims(t);
       const margin = Math.max(fp0.lenX, fp0.lenY, fp90.lenX, fp90.lenY) + 50;
       const free = computeFreeRects(t, m, margin, margin);
@@ -1124,11 +1145,11 @@ function placeUnits(units) {
   return { placed, failed, overflowed };
 }
 
-/** 同一品番で積み余地がある配置のうち最も前方(小x)のものを返す */
-function frontmostStackable(code, maxStack) {
+/** 同一品番で積み余地がある配置のうち最も前方(小x)のものを返す（truckIdを指定するとそのトラック内のみ対象） */
+function frontmostStackable(code, maxStack, truckId) {
   let best = null;
   state.placements.forEach(p => {
-    if (p.code === code && (p.stack || 1) < maxStack) {
+    if (p.code === code && (p.stack || 1) < maxStack && (!truckId || p.truckInstanceId === truckId)) {
       if (!best || p.x < best.x) best = p;
     }
   });
@@ -1173,7 +1194,7 @@ function autoPlaceSlip(slipId) {
     used[it.code] = (used[it.code] || 0) + n;
   });
   if (units.length === 0) { toast('この伝票に積める残数がありません'); return; }
-  const r = placeUnits(units);
+  const r = placeUnits(units, s.targetTruckId);
   if (r.noTruck) return;
   placeResultToast('伝票から', r);
 }
@@ -1461,6 +1482,7 @@ function handleSlipUpload(e) {
       isImage,
       thumbUrl: isImage ? URL.createObjectURL(file) : null,
       items: runOcr(state.slips.length),   // ★OCR結果を商品マスターへ照合済み（伝票ごと）§5
+      targetTruckId: (state.trucks[0] && state.trucks[0].instanceId) || null,   // 配置先トラック（既定は先頭）§4
     };
     state.slips.push(slip);
   });
@@ -1570,7 +1592,7 @@ function serialize() {
     savedAt: new Date().toISOString(),
     projectName: state.projectName,
     trucks: state.trucks,
-    slips: state.slips.map(s => ({ id: s.id, name: s.name, isImage: s.isImage, items: s.items })),
+    slips: state.slips.map(s => ({ id: s.id, name: s.name, isImage: s.isImage, items: s.items, targetTruckId: s.targetTruckId || null })),
     manual: state.manual,
     placements: state.placements,
     productModes: state.productModes,   // ③展開/折りたたみの選択状態
@@ -1598,6 +1620,7 @@ function hydrate(obj) {
       code: it.code, qty: it.qty, def: it.def || null,
       method: it.method || null, confidence: it.confidence, rawName: it.rawName || null,
     })),
+    targetTruckId: s.targetTruckId || null,
   }));
   state.manual = (obj.manual || []).map(m => ({ id: m.id || uid('m'), code: m.code, qty: m.qty, def: m.def || null }));
   // 旧形式（products直保存・slips/manualなし）の移行: products を手入力ソースへ変換
