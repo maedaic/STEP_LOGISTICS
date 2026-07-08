@@ -435,7 +435,7 @@ function remainingByCode(code) {
 }
 
 /** 配置用の商品行（伝票・手入力グループ内で共通利用） */
-function buildProductRow(code, qtyInSource) {
+function buildProductRow(code, qtyInSource, matchInfo) {
   const info = productInfo(code);
   const rem = remainingByCode(code);
   const row = document.createElement('div');
@@ -453,6 +453,15 @@ function buildProductRow(code, qtyInSource) {
       <button class="fold-btn ${foldMode === 'folded' ? 'is-on' : ''}" data-fold="folded">折りたたみ</button>
       <button class="fold-btn ${foldMode === 'unfolded' ? 'is-on' : ''}" data-fold="unfolded">展開</button>
     </div>` : '';
+
+  // OCR商品マスター照合バッジ（品番が読めず商品名だけで補正された行のみ表示）§5
+  const ocrBadge = (matchInfo && matchInfo.method === 'name')
+    ? `<div class="pr-ocr-match" title="OCR「${matchInfo.rawName || ''}」を商品マスターの近似一致で「${info.name}」へ補正">
+        商品マスター照合：一致率${Math.round((matchInfo.confidence || 0) * 100)}%</div>`
+    : (matchInfo && matchInfo.method === 'none')
+      ? `<div class="pr-ocr-nomatch" title="商品マスターに一致候補が見つかりませんでした。品番をご確認ください">
+          ⚠ 商品マスター未一致（要確認）</div>`
+      : '';
 
   if (info.isMaterial) {
     // 部材（型式A等）: 型式は表示せず商品名のみ。既定ではトラック積載対象外（Logistics改善指示書 §1）
@@ -479,6 +488,7 @@ function buildProductRow(code, qtyInSource) {
         <span class="pr-qty">×${qtyInSource}</span>
       </div>
       <div class="pr-name">${info.name}　${info.width}×${info.depth}×${info.height}</div>
+      ${ocrBadge}
       ${foldToggle}
       <div class="pr-remain ${rem <= 0 ? 'is-zero' : ''}">残${rem}</div>`;
   }
@@ -539,7 +549,7 @@ function renderProductList() {
       none.textContent = '読取結果なし';
       group.appendChild(none);
     }
-    (s.items || []).forEach(it => group.appendChild(buildProductRow(it.code, it.qty)));
+    (s.items || []).forEach(it => group.appendChild(buildProductRow(it.code, it.qty, it)));
     host.appendChild(group);
   });
 
@@ -1265,6 +1275,71 @@ function resolveProductCode(raw) {
   return m ? m.code : n;
 }
 
+/* ---------------------------------------------------------------------------
+ * OCR結果 ×商品マスター照合（Logistics改善指示書 §5）
+ *   OCR → 商品マスター検索 → 一致候補抽出 → 一致率判定 → 正式商品へ変換
+ *   品番が正しく読めた場合は品番一致(confidence=1)を優先。品番が無い/読めない場合は
+ *   商品名の文字bigram類似度（Dice係数、空白を持たない日本語でも安定して比較できる）で
+ *   最も近い商品マスターへ補正する。
+ * ------------------------------------------------------------------------- */
+function bigrams(s) {
+  const grams = [];
+  for (let i = 0; i < s.length - 1; i++) grams.push(s.slice(i, i + 2));
+  return grams;
+}
+/** 商品名同士の類似度（0〜1）。Sørensen-Dice係数（文字bigram） */
+function nameSimilarity(a, b) {
+  const norm = (s) => toHalfWidth(String(s || '')).replace(/[\s　()（）]/g, '');
+  const na = norm(a), nb = norm(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  const ga = bigrams(na), gb = bigrams(nb);
+  if (ga.length === 0 || gb.length === 0) return na === nb ? 1 : 0;
+  const counts = new Map();
+  gb.forEach(g => counts.set(g, (counts.get(g) || 0) + 1));
+  let overlap = 0;
+  ga.forEach(g => { const c = counts.get(g) || 0; if (c > 0) { overlap++; counts.set(g, c - 1); } });
+  return (2 * overlap) / (ga.length + gb.length);
+}
+const OCR_NAME_MATCH_THRESHOLD = 0.45;   // これ未満は「一致候補なし」として未解決扱いにする
+
+/**
+ * OCRが読み取った1行（品番らしき文字列 / 商品名 / 数量）を商品マスターへ照合し、
+ * 正式な商品コードへ変換する。部材（型式A等）は照合せずそのまま返す。
+ * 戻り値: { code, qty, def, method:'material'|'code'|'name'|'none', confidence, rawName }
+ */
+function matchOcrLine(line) {
+  const qty = line.qty;
+  const rawCode = (line.rawCode || '').trim();
+  const rawName = (line.rawName || '').trim();
+
+  if (rawCode && isMaterialType(rawCode)) {
+    return { code: normalizeCode(rawCode) || rawCode, qty, def: { name: rawName || '部材' }, method: 'material', confidence: 1, rawName };
+  }
+
+  // ①品番として一致するか（読み取れていれば最優先・確実）
+  if (rawCode) {
+    const resolved = resolveProductCode(rawCode);
+    const exact = PRODUCT_MASTER.find(p => p.code === resolved);
+    if (exact) return { code: exact.code, qty, method: 'code', confidence: 1, rawName };
+  }
+
+  // ②品番が無い/一致しない場合は商品名の近似一致で補正
+  if (rawName) {
+    let best = null, bestScore = 0;
+    PRODUCT_MASTER.forEach(p => {
+      const score = nameSimilarity(rawName, p.name);
+      if (score > bestScore) { bestScore = score; best = p; }
+    });
+    if (best && bestScore >= OCR_NAME_MATCH_THRESHOLD) {
+      return { code: best.code, qty, method: 'name', confidence: bestScore, rawName };
+    }
+  }
+
+  // ③一致候補なし → 未解決のまま手入力同様に保持（手動修正を促す）
+  return { code: rawCode || rawName || '?', qty, def: { name: rawName || rawCode || '未認識' }, method: 'none', confidence: 0, rawName };
+}
+
 /* 手入力で商品追加。選択した伝票（またはOCR外の「手入力」）へ品番・数量を追加 LEFT-005/006 */
 function addProductManual() {
   const codeEl = document.getElementById('manCode');
@@ -1382,7 +1457,7 @@ function handleSlipUpload(e) {
       name: file.name,
       isImage,
       thumbUrl: isImage ? URL.createObjectURL(file) : null,
-      items: runOcrStub(state.slips.length),   // ★一括OCRのスタブ結果（伝票ごと）
+      items: runOcr(state.slips.length),   // ★OCR結果を商品マスターへ照合済み（伝票ごと）§5
     };
     state.slips.push(slip);
   });
@@ -1400,14 +1475,28 @@ function handleSlipUpload(e) {
  * デモでは伝票ごとに別内容を返し、同一品番の自動集計を確認できるようにしている
  * （伝票1: C6×8,C8N×3 ／ 伝票2: C6×8,C9×4 → C6は16に集計）。全て実在コード。
  */
+/**
+ * OCRエンジンのスタブ（本番: 写真/PDF → OCRエンジン → {rawCode, rawName, qty}の生読取結果）。
+ * 品番が鮮明に読めなかった行は rawCode を空にし、商品名だけを渡す（③の行で再現）。
+ * 実OCR接続時はここを実エンジン呼び出しに差し替え、{rawCode, rawName, qty}を返せばよい。
+ * 型式「A」の部材は rawCode='A' として渡す（§1・商品マスター照合はしない）。
+ */
 function runOcrStub(slipIndex) {
-  // 型式「A」＝部材（商品マスター照合なし・名称は def.name をそのまま使用）§1
   const sets = [
-    [{ code: 'C6', qty: 8 }, { code: 'C8N', qty: 3 }, { code: 'A', qty: 2, def: { name: 'ガラス', width: 500, depth: 500, height: 10 } }],
-    [{ code: 'C6', qty: 8 }, { code: 'C9', qty: 4 }],
-    [{ code: 'C2C', qty: 4 }, { code: 'C90C', qty: 2 }],
+    [{ rawCode: 'C6', rawName: '宝飾ケース（黒）', qty: 8 },
+     { rawCode: 'C8N', rawName: '宝飾角ケース（黒）', qty: 3 },
+     { rawCode: 'A', rawName: 'ガラス', qty: 2 }],
+    [{ rawCode: 'C6', rawName: '宝飾ケース（黒）', qty: 8 },
+     { rawCode: 'C9', rawName: '宝飾ハイケース（黒）', qty: 4 }],
+    [{ rawCode: '', rawName: '宝飾ケース', qty: 4 },     // 品番が読み取れず商品名のみ→商品マスター照合で C6 へ補正される例
+     { rawCode: 'C90C', rawName: 'ガラスハイケース', qty: 2 }],
   ];
   return sets[slipIndex % sets.length].map(x => ({ ...x }));
+}
+
+/** OCRの生読取結果を商品マスターへ照合し、伝票明細（{code,qty,def,method,confidence,rawName}）へ変換する §5 */
+function runOcr(slipIndex) {
+  return runOcrStub(slipIndex).map(matchOcrLine);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1502,7 +1591,10 @@ function hydrate(obj) {
   state.trucks = (obj.trucks || []).map(t => ({ instanceId: t.instanceId || uid('t'), masterId: t.masterId, seq: t.seq, viewMode: t.viewMode || 'top' }));
   state.slips = (obj.slips || []).map(s => ({
     id: s.id || uid('s'), name: s.name || '伝票', isImage: !!s.isImage, thumbUrl: null,
-    items: (s.items || []).map(it => ({ code: it.code, qty: it.qty, def: it.def || null })),
+    items: (s.items || []).map(it => ({
+      code: it.code, qty: it.qty, def: it.def || null,
+      method: it.method || null, confidence: it.confidence, rawName: it.rawName || null,
+    })),
   }));
   state.manual = (obj.manual || []).map(m => ({ id: m.id || uid('m'), code: m.code, qty: m.qty, def: m.def || null }));
   // 旧形式（products直保存・slips/manualなし）の移行: products を手入力ソースへ変換
