@@ -104,7 +104,12 @@ input, textarea { font-family: inherit; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .panel-left  { padding: 16px; }
 .panel-center{ padding: 16px; }
-.panel-right { padding: 16px; }
+.panel-right {
+  padding: 16px;
+  position: sticky; top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
 
 .section-title { font-size: 13px; font-weight: 700; color: var(--text-sub); margin: 4px 0 10px; }
 
@@ -294,35 +299,33 @@ input, textarea { font-family: inherit; }
 .cargo.drop-hint { outline: 2px dashed var(--blue); outline-offset: -4px; }
 
 /* トラック前方（運転席）キャビン表現。左＝前方＝進行方向（CENTER-001）
- * 実車に近い立体感（上面ハイライト＋下面シェード）とホイールで「前」を直感的に示す。 */
+ * 参考画像のミニカー風トラックに寄せたシンプルなフラットデザイン。
+ * 荷台の視認を妨げないよう、立体的な装飾は最小限にとどめる。 */
 .truck-cab {
-  position: absolute; left: 4px; top: 18px; bottom: 0; width: 40px;
-  background: linear-gradient(160deg, #e4e9f1 0%, #c3ccd9 55%, #a9b4c4 100%);
-  border: 1.5px solid #8f9baa;
-  border-radius: 16px 4px 4px 16px;   /* 左（前）を丸めてノーズ感 */
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px;
-  padding-top: 10px;
-  box-shadow: inset 2px 2px 0 rgba(255,255,255,.6), inset -2px -3px 4px rgba(0,0,0,.12), 1px 0 3px rgba(0,0,0,.08);
+  position: absolute; left: 4px; top: 18px; bottom: 0; width: 36px;
+  background: #eef1f5;
+  border: 1.5px solid #9aa5b3;
+  border-radius: 13px 3px 3px 13px;   /* 左（前）を丸めてノーズ感 */
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
+  padding-top: 7px;
 }
 .cab-roof {
-  width: 26px; height: 4px; border-radius: 3px 3px 0 0;
-  background: linear-gradient(90deg, #f3f5f8, #d3dae3);
+  width: 22px; height: 5px; border-radius: 3px 3px 0 0;
+  background: #2b3442;   /* 参考画像の黒い屋根ライン */
 }
 .cab-glass {
-  width: 24px; height: 16px; background: linear-gradient(160deg, #eaf3ff, #a9c6ec 70%);
-  border: 1px solid #8fabd6; border-radius: 3px 6px 2px 2px;
-  box-shadow: inset -3px -3px 4px rgba(30,60,120,.18);
+  width: 20px; height: 14px; background: #bfe0fb;   /* 参考画像の水色の窓 */
+  border: 1.5px solid #2b3442; border-radius: 4px;
 }
-.cab-label { font-size: 12px; font-weight: 800; color: #3d4756; letter-spacing: 1px; }
+.cab-label { font-size: 11px; font-weight: 800; color: #4a5566; }
 .cab-wheel {
-  width: 15px; height: 15px; border-radius: 50%; margin-top: auto; margin-bottom: 4px;
-  background: radial-gradient(circle at 35% 35%, #555 0%, #222 70%);
-  border: 2px solid #111; box-shadow: 0 1px 2px rgba(0,0,0,.4);
+  width: 12px; height: 12px; border-radius: 50%; margin-top: auto; margin-bottom: 4px;
+  background: #2b3442;
 }
 /* キャビンと荷台の境目を明示する仕切り */
 .cab-boundary {
-  position: absolute; left: 46px; top: 18px; bottom: 0; width: 2px;
-  background: repeating-linear-gradient(180deg, #b7c0cd 0, #b7c0cd 4px, transparent 4px, transparent 8px);
+  position: absolute; left: 42px; top: 18px; bottom: 0; width: 1px;
+  background: var(--line);
 }
 
 .placement {
@@ -434,6 +437,12 @@ input, textarea { font-family: inherit; }
 .ocr-group-place:disabled { opacity: .4; cursor: default; }
 .ocr-group-del { border: none; background: transparent; color: var(--text-mut); font-size: 12px; font-weight: 600; flex: none; }
 .ocr-group-del:hover { color: #c0392b; }
+/* 各伝票カード下部：この伝票へ直接品番を追加する小フォーム */
+.ocr-group-addrow { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line-2); background: #fafbfc; }
+.ocr-add-code { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 12px; }
+.ocr-add-qty { width: 46px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 4px; font-size: 12px; text-align: center; }
+.ocr-add-btn { border: 1px solid #bcd2f4; background: #eef4fd; color: var(--blue); font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 6px; flex: none; }
+.ocr-add-btn:hover { background: #e0ebfb; }
 .ocr-group .product-row { padding: 10px; }
 .ocr-group .product-row:last-child { border-bottom: none; }
 .ocr-empty { font-size: 12px; color: var(--text-mut); padding: 10px; }
@@ -499,7 +508,9 @@ input, textarea { font-family: inherit; }
 .relayout-modal { width: 860px; max-width: 94vw; }
 .relayout-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
 .relayout-card { border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
-.relayout-preview { position: relative; height: 140px; background: #f7f8fa; border-bottom: 1px solid var(--line-2); overflow: hidden; }
+.relayout-previews { max-height: 220px; overflow-y: auto; border-bottom: 1px solid var(--line-2); }
+.relayout-preview { position: relative; height: 90px; background: #f7f8fa; overflow: hidden; }
+.relayout-preview + .relayout-preview { border-top: 1px dashed var(--line-2); }
 .relayout-box { position: absolute; border: 1.5px solid; border-radius: 2px; box-sizing: border-box; }
 .relayout-info { padding: 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .relayout-label { font-size: 13px; font-weight: 800; }

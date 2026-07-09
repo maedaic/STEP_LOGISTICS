@@ -559,6 +559,25 @@ function renderProductList() {
       group.appendChild(none);
     }
     (s.items || []).forEach(it => group.appendChild(buildProductRow(it.code, it.qty, it)));
+
+    // この伝票へ直接、品番を手入力で追加できる小フォーム（各伝票の下部分）
+    const addRow = document.createElement('div');
+    addRow.className = 'ocr-group-addrow';
+    addRow.innerHTML = `
+      <input class="ocr-add-code" type="text" placeholder="品番を追加">
+      <input class="ocr-add-qty" type="number" value="1" min="1">
+      <button class="ocr-add-btn">追加</button>`;
+    const codeEl = addRow.querySelector('.ocr-add-code');
+    const qtyEl = addRow.querySelector('.ocr-add-qty');
+    const doAdd = () => {
+      addItemToSlip(s.id, codeEl.value, Math.max(1, parseInt(qtyEl.value, 10) || 1));
+      codeEl.value = ''; qtyEl.value = '1';
+      codeEl.focus();
+    };
+    addRow.querySelector('.ocr-add-btn').addEventListener('click', doAdd);
+    codeEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAdd(); });
+    group.appendChild(addRow);
+
     host.appendChild(group);
   });
 
@@ -1260,35 +1279,51 @@ function unitsFromTruckPlacements(truckInstanceId) {
   return units;
 }
 
+/** 現在配置済みの全商品（全トラック合計）を、品番の配列（stackはユニットに展開）で返す */
+function unitsFromAllPlacements() {
+  const units = [];
+  state.placements.forEach(p => { for (let i = 0; i < (p.stack || 1); i++) units.push(p.code); });
+  return units;
+}
+
 /**
- * units を、指定した並び順(sortFn)・フィット関数(fitFn)で1つの案として組み直す。
- * 実際のstateには一切触れず、仮の配置リストを返すだけ（比較用プレビュー生成のため）。
+ * units を、指定した並び順(sortFn)・フィット関数(fitFn)でトラック群(trucks)へ組み直す。
+ * 実際のstateには一切触れず、トラックごとの仮配置リストを返すだけ（比較用プレビュー生成のため）。
+ * trucks配列の順番を「前方から埋める」優先順位として扱う（既存のplaceUnitsと同じ考え方）。
  */
-function buildLayoutCandidate(units, m, sortFn, fitFn) {
+function buildLayoutCandidate(units, trucks, sortFn, fitFn) {
   const ordered = [...units].sort(sortFn);
-  const placements = [];
+  const byTruck = new Map(trucks.map(t => [t.instanceId, []]));
   let failed = 0;
   ordered.forEach(code => {
     const info = productInfo(code);
     if (canStack(info)) {
       let stackTarget = null;
-      placements.forEach(p => {
-        if (p.code === code && (p.stack || 1) < (info.maxStack || 1)) {
-          if (!stackTarget || p.x < stackTarget.x) stackTarget = p;
-        }
+      trucks.forEach(t => {
+        byTruck.get(t.instanceId).forEach(p => {
+          if (p.code === code && (p.stack || 1) < (info.maxStack || 1)) {
+            if (!stackTarget || p.x < stackTarget.x) stackTarget = p;
+          }
+        });
       });
       if (stackTarget) { stackTarget.stack = (stackTarget.stack || 1) + 1; return; }
     }
     const fp0 = footprint(info, 0), fp90 = footprint(info, 90);
-    const free = computeFreeRectsFromList(placements, m);
-    const best = fitFn(free, fp0, fp90);
-    if (best) {
-      placements.push({ id: uid('cand'), code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
-    } else {
-      failed++;
+    let placedHere = false;
+    for (const t of trucks) {
+      const m = truckDims(t);
+      const list = byTruck.get(t.instanceId);
+      const free = computeFreeRectsFromList(list, m);
+      const best = fitFn(free, fp0, fp90);
+      if (best) {
+        list.push({ id: uid('cand'), code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
+        placedHere = true;
+        break;
+      }
     }
+    if (!placedHere) failed++;
   });
-  return { placements, failed };
+  return { byTruck, failed };
 }
 
 const RELAYOUT_STRATEGIES = [
@@ -1317,26 +1352,49 @@ function fillRatioOf(placements, m) {
   return area / (m.cargoLength * m.cargoWidth);
 }
 
-/** 再配置モーダルを開き、複数の候補案をミニプレビューで比較・選択できるようにする */
-function openRelayoutModal(truckInstanceId) {
-  const t = state.trucks.find(x => x.instanceId === truckInstanceId);
-  if (!t) return;
-  const m = truckDims(t);
-  const units = unitsFromTruckPlacements(truckInstanceId);
-  if (units.length === 0) { toast('この荷台には商品がありません'); return; }
+/** 1台分のミニプレビューをhost内へ描画する（実キャンバスとは独立した簡易版） */
+function renderMiniPreview(host, placements, m) {
+  const box = host.getBoundingClientRect();
+  const scale = Math.min((box.width || 260) / m.cargoLength, (box.height || 90) / m.cargoWidth);
+  placements.forEach(p => {
+    const info = productInfo(p.code);
+    const fp = footprint(info, p.rotation);
+    const el = document.createElement('div');
+    el.className = 'relayout-box';
+    el.style.left = (p.x * scale) + 'px';
+    el.style.top = (p.y * scale) + 'px';
+    el.style.width = (fp.lenX * scale) + 'px';
+    el.style.height = (fp.lenY * scale) + 'px';
+    el.style.borderColor = info.color;
+    el.style.background = hexToRgba(info.color, 0.25);
+    host.appendChild(el);
+  });
+}
+
+/**
+ * 再配置モーダル本体（1台分の再配置／全体の再配置で共通）。
+ * trucks: 対象トラック配列（1台なら単一トラック再配置、複数なら全体再配置）
+ * units: 組み直す商品の品番配列、applyFn: 「この案を適用」時にstateへ反映する処理
+ */
+function openRelayoutModalCore(trucks, units, applyFn, title, message) {
+  if (trucks.length === 0) { toast('先にトラックを選択してください'); return; }
+  if (units.length === 0) { toast('組み直す商品がありません'); return; }
 
   const candidates = RELAYOUT_STRATEGIES.map(strategy => ({
     ...strategy,
-    result: buildLayoutCandidate(units, m, strategy.sortFn, strategy.fitFn),
+    result: buildLayoutCandidate(units, trucks, strategy.sortFn, strategy.fitFn),
   }));
 
   const mask = document.createElement('div');
   mask.className = 'modal-mask';
   const cardsHtml = candidates.map((c, i) => {
-    const fillPct = Math.round(fillRatioOf(c.result.placements, m) * 100);
+    const totalArea = trucks.reduce((s, t) => { const m = truckDims(t); return s + m.cargoLength * m.cargoWidth; }, 0);
+    const usedArea = trucks.reduce((s, t) => s + fillRatioOf(c.result.byTruck.get(t.instanceId), truckDims(t)) * (truckDims(t).cargoLength * truckDims(t).cargoWidth), 0);
+    const fillPct = Math.round((usedArea / totalArea) * 100);
+    const previewsHtml = trucks.map((t, ti) => `<div class="relayout-preview" data-cand="${i}" data-truck="${ti}"></div>`).join('');
     return `
       <div class="relayout-card">
-        <div class="relayout-preview" data-cand="${i}"></div>
+        <div class="relayout-previews">${previewsHtml}</div>
         <div class="relayout-info">
           <div class="relayout-label">${c.label}</div>
           <div class="relayout-desc">${c.desc}</div>
@@ -1347,8 +1405,8 @@ function openRelayoutModal(truckInstanceId) {
   }).join('');
   mask.innerHTML = `
     <div class="modal relayout-modal">
-      <h3>再配置案を選択</h3>
-      <p class="modal-message">現在この荷台に積まれている商品を、異なるロジックで組み直しました。気に入った案を選んでください。</p>
+      <h3>${title}</h3>
+      <p class="modal-message">${message}</p>
       <div class="relayout-cards">${cardsHtml}</div>
       <div class="modal-actions">
         <button class="btn" data-cancel>キャンセル</button>
@@ -1360,11 +1418,7 @@ function openRelayoutModal(truckInstanceId) {
   mask.querySelectorAll('.relayout-apply').forEach(btn => {
     btn.addEventListener('click', () => {
       const cand = candidates[parseInt(btn.dataset.cand, 10)];
-      state.placements = state.placements.filter(p => p.truckInstanceId !== truckInstanceId)
-        .concat(cand.result.placements.map(p => ({ ...p, id: uid('p'), truckInstanceId })));
-      renderProductList();
-      renderCanvases();
-      saveToLocal();
+      applyFn(cand);
       close();
       if (cand.result.failed > 0) toast(`一部の商品はこの案では積み切れませんでした（${cand.result.failed}個）`);
       else toast('再配置しました');
@@ -1372,38 +1426,45 @@ function openRelayoutModal(truckInstanceId) {
   });
   document.body.appendChild(mask);
 
-  // ミニプレビュー描画（実キャンバスとは独立した簡易版）
   candidates.forEach((c, i) => {
-    const host = mask.querySelector(`.relayout-preview[data-cand="${i}"]`);
-    const box = host.getBoundingClientRect();
-    const scale = Math.min((box.width || 260) / m.cargoLength, (box.height || 140) / m.cargoWidth);
-    c.result.placements.forEach(p => {
-      const info = productInfo(p.code);
-      const fp = footprint(info, p.rotation);
-      const el = document.createElement('div');
-      el.className = 'relayout-box';
-      el.style.left = (p.x * scale) + 'px';
-      el.style.top = (p.y * scale) + 'px';
-      el.style.width = (fp.lenX * scale) + 'px';
-      el.style.height = (fp.lenY * scale) + 'px';
-      el.style.borderColor = info.color;
-      el.style.background = hexToRgba(info.color, 0.25);
-      host.appendChild(el);
+    trucks.forEach((t, ti) => {
+      const host = mask.querySelector(`.relayout-preview[data-cand="${i}"][data-truck="${ti}"]`);
+      renderMiniPreview(host, c.result.byTruck.get(t.instanceId), truckDims(t));
     });
   });
 }
 
-/** 全体を自動配置（残数ぶん） */
-function autoPlaceAll() {
-  const units = [];
+/** トラック1台分の再配置（トラックブロックの「再配置」ボタン） */
+function openRelayoutModal(truckInstanceId) {
+  const t = state.trucks.find(x => x.instanceId === truckInstanceId);
+  if (!t) return;
+  const units = unitsFromTruckPlacements(truckInstanceId);
+  openRelayoutModalCore([t], units, (cand) => {
+    state.placements = state.placements.filter(p => p.truckInstanceId !== truckInstanceId)
+      .concat(cand.result.byTruck.get(truckInstanceId).map(p => ({ ...p, id: uid('p'), truckInstanceId })));
+    renderProductList();
+    renderCanvases();
+    saveToLocal();
+  }, '再配置案を選択', '現在この荷台に積まれている商品を、異なるロジックで組み直しました。気に入った案を選んでください。');
+}
+
+/** 全トラック分の再配置（「トラックへ積む（自動配置）」ボタン） */
+function openGlobalRelayoutModal() {
+  const units = unitsFromAllPlacements();
   state.products.forEach(p => {
     if (p.isMaterial && !state.materialIncluded[p.code]) return;   // 部材は既定で自動配置の対象外
     for (let i = 0; i < remaining(p); i++) units.push(p.code);
   });
-  if (units.length === 0) { toast('配置する残数がありません'); return; }
-  const r = placeUnits(units);
-  if (r.noTruck) return;
-  placeResultToast('', r);
+  openRelayoutModalCore(state.trucks, units, (cand) => {
+    const next = [];
+    state.trucks.forEach(t => {
+      cand.result.byTruck.get(t.instanceId).forEach(p => next.push({ ...p, id: uid('p'), truckInstanceId: t.instanceId }));
+    });
+    state.placements = next;
+    renderProductList();
+    renderCanvases();
+    saveToLocal();
+  }, '全体の再配置案を選択', '配置済み＋未配置の残数をあわせた全商品を、全トラックへ異なるロジックで組み直しました。気に入った案を選んでください。');
 }
 
 /** 指定した伝票のみ自動配置（RIGHT-004）。在庫(残)の範囲で積む */
@@ -1494,7 +1555,7 @@ function bindGlobalControls() {
   document.getElementById('manQty').addEventListener('keydown', (e) => { if (e.key === 'Enter') addProductManual(); });
 
   // 「トラックへ積む」自動配置
-  document.getElementById('btnAutoPlace').addEventListener('click', autoPlaceAll);
+  document.getElementById('btnAutoPlace').addEventListener('click', openGlobalRelayoutModal);
 
   // 商品アップロード（OCRスタブ・複数画像対応）
   document.getElementById('uploadBox').addEventListener('click', () => document.getElementById('fileSlip').click());
@@ -1591,15 +1652,14 @@ function matchOcrLine(line) {
 }
 
 /* 手入力で商品追加。選択した伝票（またはOCR外の「手入力」）へ品番・数量を追加 LEFT-005/006 */
-function addProductManual() {
-  const codeEl = document.getElementById('manCode');
-  const qtyEl = document.getElementById('manQty');
-  const slipSel = document.getElementById('manSlip');
-  const code = resolveProductCode(codeEl.value);
-  const qty = Math.max(1, parseInt(qtyEl.value, 10) || 1);
-  if (!code) { toast('品番を入力してください'); codeEl.focus(); return; }
+/**
+ * 品番を指定した伝票（またはtarget==='manual'なら手入力グループ）へ追加する共通処理。
+ * 左下の手入力フォーム・各伝票カード下部の追加フォームの両方から使う。
+ */
+function addItemToTarget(target, rawCode, qty) {
+  const code = resolveProductCode(rawCode);
+  if (!code) { toast('品番を入力してください'); return null; }
 
-  const target = slipSel ? slipSel.value : 'manual';
   if (target !== 'manual') {
     // 選択した伝票の明細へ加算（同一品番はまとめる）
     const s = state.slips.find(x => x.id === target);
@@ -1621,12 +1681,30 @@ function addProductManual() {
   }
 
   rebuildProducts();
+  renderUploads();
+  renderProductList();
+  renderCanvases();
+  saveToLocal();
+  return code;
+}
+
+/** その伝票のカード下部の追加フォームから、品番をその伝票へ直接追加する */
+function addItemToSlip(slipId, rawCode, qty) {
+  addItemToTarget(slipId, rawCode, qty);
+}
+
+function addProductManual() {
+  const codeEl = document.getElementById('manCode');
+  const qtyEl = document.getElementById('manQty');
+  const slipSel = document.getElementById('manSlip');
+  const qty = Math.max(1, parseInt(qtyEl.value, 10) || 1);
+  const target = slipSel ? slipSel.value : 'manual';
+  const code = addItemToTarget(target, codeEl.value, qty);
+  if (!code) { codeEl.focus(); return; }
+
   codeEl.value = '';
   qtyEl.value = '1';
   codeEl.focus();
-  renderUploads();
-  renderProductList();
-  saveToLocal();
 }
 
 /** 手入力の「追加先の伝票」セレクトを再構築 */
