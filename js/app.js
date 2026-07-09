@@ -110,6 +110,7 @@ function renderAll() {
   renderProductMasterAccordion();
   renderUploads();
   renderManualSlipOptions();
+  renderReflectedCategories();
   renderProductList();
   renderCanvases();
   saveToLocal();
@@ -421,6 +422,62 @@ function renderProductMasterList() {
   host.appendChild(saveRow);
 }
 
+/**
+ * shared/masters/products.json から一括反映したカテゴリの一覧（色は生成時に割り当てたものと対応）。
+ * 「商品マスター反映状況」パネルの表示対象・表示順を定義する。
+ */
+const REFLECTED_CATEGORIES = [
+  { name: '照明機器', color: '#facc15' },
+  { name: 'パネル', color: '#0d9488' },
+  { name: 'パネル・仕切り', color: '#2dd4bf' },
+  { name: '鏡(ミラー)', color: '#ec4899' },
+  { name: 'テーブル', color: '#ea580c' },
+  { name: 'イス', color: '#fb923c' },
+  { name: '展示台', color: '#65a30d' },
+  { name: 'ハンガーラック', color: '#c026d3' },
+  { name: 'ハンガー', color: '#e879f9' },
+  { name: 'フィッティングルーム', color: '#e11d48' },
+  { name: '接客カウンター(アパレル)', color: '#fb7185' },
+  { name: 'アンティーク・ヴィンテージ', color: '#78716c' },
+  { name: '和装ディスプレイ', color: '#9f1239' },
+  { name: 'サインスタンド・イーゼル', color: '#52525b' },
+  { name: '受付カウンター', color: '#4b5563' },
+  { name: '接客カウンター', color: '#9ca3af' },
+  { name: 'イベント用品', color: '#a3e635' },
+];
+
+/** 「商品マスター反映状況」パネル：カテゴリ一括反映がどこまで済んでいるかを一目で確認できるようにする */
+function renderReflectedCategories() {
+  const host = document.getElementById('reflectedCategoryList');
+  if (!host) return;
+  host.innerHTML = '';
+
+  let totalItems = 0, totalSized = 0;
+  REFLECTED_CATEGORIES.forEach(cat => {
+    const items = PRODUCT_MASTER.filter(p => p.category === cat.name);
+    if (items.length === 0) return;
+    const sized = items.filter(p => p.width && p.depth && p.height).length;
+    totalItems += items.length;
+    totalSized += sized;
+
+    const row = document.createElement('div');
+    row.className = 'reflected-row';
+    row.innerHTML = `
+      <span class="reflected-dot" style="background:${cat.color}"></span>
+      <span class="reflected-name">${cat.name}</span>
+      <span class="reflected-count">${items.length}件</span>
+      <span class="reflected-status ${sized === items.length ? 'is-complete' : ''}">
+        ${sized === items.length ? '✓ サイズ確定' : `${sized}/${items.length} サイズ確定`}
+      </span>`;
+    host.appendChild(row);
+  });
+
+  const summary = document.createElement('div');
+  summary.className = 'reflected-summary';
+  summary.textContent = `反映済み ${totalItems}件（うちサイズ確定 ${totalSized}件）`;
+  host.prepend(summary);
+}
+
 /** 現在のPRODUCT_OVERRIDES（この端末での編集差分）をJSONで表示し、コピーできるようにする */
 function openProductOverridesExportModal() {
   const json = JSON.stringify(PRODUCT_OVERRIDES, null, 2);
@@ -531,9 +588,12 @@ function rebuildProducts() {
       return;
     }
     const master = getProductMaster(code);
-    if (master) {
+    if (master && master.width && master.depth && master.height) {
       const dims = effectiveMasterDims(master);
       products.push({ code, name: master.name, width: dims.width, depth: dims.depth, height: dims.height, qty: v.qty, color: master.color, stackable: master.stackable, maxStack: master.maxStack, foldable: !!master.folded });
+    } else if (master) {
+      // マスターには登録済みだがサイズ未計測（一括反映カテゴリ等）。400は暫定の仮サイズ（指示書③）
+      products.push({ code, name: master.name, width: 400, depth: 400, height: 400, qty: v.qty, color: master.color || pickColor(ci), stackable: master.stackable, maxStack: master.maxStack, sizeUnknown: true });
     } else if (v.def) {
       const hasDims = v.def.width && v.def.depth && v.def.height;
       products.push({

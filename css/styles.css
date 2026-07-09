@@ -257,6 +257,19 @@ input, textarea { font-family: inherit; }
 .slip-del { border: none; background: transparent; color: var(--text-mut); font-size: 12px; font-weight: 600; flex: none; }
 .slip-del:hover { color: #c0392b; }
 
+/* 商品マスター反映状況（カテゴリ一括反映の可視化） */
+.reflected-box { margin-top: 16px; border-top: 1px solid var(--line-2); padding-top: 14px; }
+.reflected-summary { font-size: 12px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.reflected-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; font-size: 12px;
+}
+.reflected-row:hover { background: #f7f8fa; }
+.reflected-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.reflected-name { flex: 1; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reflected-count { color: var(--text-mut); flex: none; }
+.reflected-status { flex: none; font-size: 11px; font-weight: 700; color: #b45309; min-width: 84px; text-align: right; }
+.reflected-status.is-complete { color: #16a34a; }
+
 /* 手入力フォーム */
 .manual-box { margin-top: 16px; border-top: 1px solid var(--line-2); padding-top: 14px; }
 .manual-slip { margin-bottom: 8px; }
