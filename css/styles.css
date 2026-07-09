@@ -211,6 +211,16 @@ input, textarea { font-family: inherit; }
   flex: none; align-self: flex-start;
 }
 .pm-del-btn:hover { color: #c0392b; }
+.pm-test-btn {
+  border: 1px solid #bcd2f4; background: #eef4fd; color: var(--blue); font-size: 11px; font-weight: 700;
+  padding: 4px 8px; border-radius: 6px; flex: none; align-self: flex-start;
+}
+.pm-test-btn:hover { background: #e0ebfb; }
+.pm-filter-row {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub);
+  padding: 4px 2px 8px; cursor: pointer;
+}
+.pm-all-done { font-size: 12px; color: var(--text-sub); padding: 16px 4px; text-align: center; }
 .pm-save-row { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; }
 .pm-save-row .btn { padding: 8px 16px; font-size: 12px; }
 .pm-export-textarea {

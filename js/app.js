@@ -27,6 +27,7 @@ let state = {
 let pickedCode = null;   // クリック配置用に選択中の品番
 let selectedPid = null;  // キャンバス上で選択中の配置（Deleteキー対象）
 let accOpen = { step: false, gaisha: false, pm: false }; // トラック一覧・商品マスターアコーディオンの開閉
+let pmFilterUnknownOnly = true;   // 商品マスター一覧：未入力（積み重ね不明）のみ表示するか
 let uidCounter = 1;
 const uid = (p) => `${p}_${Date.now().toString(36)}_${uidCounter++}`;
 
@@ -287,6 +288,17 @@ function buildProductMasterRow(base, isCustom) {
     row.appendChild(maxStackField);
   }
 
+  // 手入力へ1個追加して、商品一覧・実際の積載で見た目とサイズを確認できるようにする
+  const testBtn = document.createElement('button');
+  testBtn.className = 'pm-test-btn';
+  testBtn.textContent = '手入力へ追加';
+  testBtn.title = 'この商品を手入力へ1個追加し、商品一覧・積載で確認する';
+  testBtn.addEventListener('click', () => {
+    addItemToTarget('manual', m.code, 1);
+    toast(`「${m.code}」を手入力へ追加しました`);
+  });
+  row.appendChild(testBtn);
+
   if (isCustom) {
     const delBtn = document.createElement('button');
     delBtn.className = 'pm-del-btn';
@@ -306,9 +318,22 @@ function renderProductMasterList() {
   const host = document.getElementById('productMasterList');
   if (!host) return;
   host.innerHTML = '';
+
+  // 未入力（積み重ね不明）のみ表示 / 全件表示の切替
+  const filterRow = document.createElement('label');
+  filterRow.className = 'pm-filter-row';
+  filterRow.innerHTML = `<input type="checkbox" ${pmFilterUnknownOnly ? 'checked' : ''}> 未入力のみ表示（入力済みは一旦非表示）`;
+  filterRow.querySelector('input').addEventListener('change', (e) => {
+    pmFilterUnknownOnly = e.target.checked;
+    renderProductMasterList();
+  });
+  host.appendChild(filterRow);
+
   let lastCategory = null;
+  let shown = 0;
   PRODUCT_MASTER.forEach((base) => {
     const m = getProductMaster(base.code);
+    if (pmFilterUnknownOnly && m.stackable != null) return;   // 入力済みは一旦非表示
     if (m.category !== lastCategory) {
       lastCategory = m.category;
       const cat = document.createElement('div');
@@ -317,7 +342,14 @@ function renderProductMasterList() {
       host.appendChild(cat);
     }
     host.appendChild(buildProductMasterRow(base, false));
+    shown++;
   });
+  if (pmFilterUnknownOnly && shown === 0) {
+    const done = document.createElement('div');
+    done.className = 'pm-all-done';
+    done.textContent = '未入力の商品はありません（すべて入力済みです）';
+    host.appendChild(done);
+  }
 
   // 新規登録した商品（マスター未収録の型式・指示書②）
   const customCodes = customProductCodes();
