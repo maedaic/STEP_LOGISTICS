@@ -329,6 +329,8 @@ const MATERIAL_TYPE_CODES = ['A'];
 function isMaterialType(code) {
   return MATERIAL_TYPE_CODES.includes(String(code).trim().toUpperCase());
 }
+/** 部材（型式A等）専用の指定色。実商品の巡回パレットとは別に、常にこの色で統一表示する */
+const MATERIAL_COLOR = '#94a3b8';
 
 function rebuildProducts() {
   mergeManualDuplicates();   // 過去に分かれて保存された同一品番の手入力行を統合（自己修復）
@@ -353,7 +355,7 @@ function rebuildProducts() {
       products.push({
         code, name, isMaterial: true,
         width: (v.def && v.def.width) || 400, depth: (v.def && v.def.depth) || 400, height: (v.def && v.def.height) || 400,
-        qty: v.qty, color: (v.def && v.def.color) || pickColor(ci), stackable: null, maxStack: 1,
+        qty: v.qty, color: (v.def && v.def.color) || MATERIAL_COLOR, stackable: null, maxStack: 1,
       });
       ci++;
       return;
@@ -656,9 +658,12 @@ function renderCanvases() {
     return;
   }
 
-  // 積み残し（未配置の残数）を中央UI上部に常時表示（指示書：モーダルを閉じても状況が分かるように）
+  // 積み残し（未配置の残数）を中央UI上部に常時表示（指示書：モーダルを閉じても状況が分かるように）。
+  // 部材（型式A等）は既定でトラック積載対象外＝そもそも積む前提ではないため、積み残し扱いにはしない。
+  // 伝票上の表記（商品一覧の行）としては引き続き表示する。
   const residual = state.products
-    .map(p => ({ label: p.isMaterial ? p.name : p.code, rem: remaining(p) }))
+    .filter(p => !p.isMaterial)
+    .map(p => ({ label: p.code, rem: remaining(p) }))
     .filter(x => x.rem > 0);
   if (residual.length > 0) {
     const banner = document.createElement('div');
