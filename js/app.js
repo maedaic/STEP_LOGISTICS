@@ -76,6 +76,22 @@ function canStack(info) {
 function productInfo(code) {
   return state.products.find(p => p.code === code) || getProductMaster(code);
 }
+/**
+ * 個別の配置(placement)の描画情報を取得。折りたたみ対応商品はplacement自身が持つ
+ * foldMode（無ければ商品一覧の既定値）を見て、その配置ごとに独立した実寸を返す。
+ * これにより同じ商品でも「これは折りたたみ、これは展開」を個別に選べる。
+ */
+function placementInfo(p) {
+  const master = getProductMaster(p.code);
+  if (master && master.folded) {
+    const mode = p.foldMode || state.productModes[p.code] || 'folded';
+    const dims = mode === 'unfolded'
+      ? { width: master.width, depth: master.depth, height: master.height }
+      : { width: master.folded.width, depth: master.folded.depth, height: master.folded.height };
+    return { ...master, ...dims };
+  }
+  return productInfo(p.code);
+}
 /** 回転を考慮したフットプリント(mm)。lenX=長さ方向, lenY=幅方向 */
 function footprint(info, rotation) {
   return rotation === 90
@@ -617,6 +633,18 @@ function renderCanvases() {
     host.innerHTML = `<div class="empty-hint"><b>トラックが選択されていません</b><br>左側からトラックを選択してください</div>`;
     return;
   }
+
+  // 積み残し（未配置の残数）を中央UI上部に常時表示（指示書：モーダルを閉じても状況が分かるように）
+  const residual = state.products
+    .map(p => ({ label: p.isMaterial ? p.name : p.code, rem: remaining(p) }))
+    .filter(x => x.rem > 0);
+  if (residual.length > 0) {
+    const banner = document.createElement('div');
+    banner.className = 'residual-banner';
+    banner.innerHTML = `⚠ 積み残しがあります：${residual.map(x => `${x.label} ×${x.rem}`).join('、')}`;
+    host.appendChild(banner);
+  }
+
   state.trucks.forEach((t, idx) => {
     const m = truckDims(t);
     const mode = t.viewMode || 'top';
@@ -705,7 +733,7 @@ function layoutCargo(block, truckInstance, mode) {
 
 /** 1つの配置商品DOM（上面図）を作る */
 function buildPlacementEl(p, truck, scale) {
-  const info = productInfo(p.code);
+  const info = placementInfo(p);
   const fp = footprint(info, p.rotation);
   const el = document.createElement('div');
   const oob = isPlacementOOB(p, truck);   // ②自動配置改善：はみ出し配置を視覚的に明示
@@ -726,8 +754,13 @@ function buildPlacementEl(p, truck, scale) {
   el.style.color = info.color;
 
   const stackBadge = (p.stack || 1) > 1 ? `<span class="p-stack">${p.stack}段</span>` : '';
+  const isFoldable = !!info.folded;
+  const foldMode = p.foldMode || state.productModes[p.code] || 'folded';
+  const foldBadge = isFoldable
+    ? `<button class="p-fold-toggle" title="クリックで折りたたみ⇄展開を切替（この1個だけ）">${foldMode === 'folded' ? '折' : '展'}</button>` : '';
   el.innerHTML = `${stackBadge}
     <span class="p-remove" title="配置を取り消す">×</span>
+    ${foldBadge}
     <span class="p-code">${info.isMaterial ? info.name : p.code}</span>
     <span class="p-size">${fp.lenX}×${fp.lenY}</span>`;
   return el;
@@ -834,6 +867,10 @@ function attachCargoHandlers(cargo, truckInstance, m) {
       removePlacement(el.dataset.pid);
       return;
     }
+    if (e.target.classList.contains('p-fold-toggle')) {   // 折/展ボタンでこの1個だけ切替
+      toggleFoldPlacement(el.dataset.pid);
+      return;
+    }
 
     // 干渉で重なった商品が複数ある場合、同じ場所を続けてクリックすると奥の商品へ
     // 選択が順送りされる（重なって隠れた商品にも手が届くように）
@@ -894,9 +931,13 @@ function dropProductAt(code, truckInstance, m, mmX, mmY) {
   let x = mmX - fp.lenX / 2;
   let y = mmY - fp.lenY / 2;
   ({ x, y } = clampToCargo(x, y, fp, m));
+  // 近くの商品や壁に磁石のように吸着させる（手動配置でも自然に隙間なく並べられるように）
+  ({ x, y } = snapPosition({ x, y, w: fp.lenX, h: fp.lenY }, truckInstance.instanceId, null, m));
 
   // 他商品との重なりは配置自体を拒否せず許可する。干渉は警告バナーで示し、ユーザーが後で調整する（指示書Ver.2 §8）
-  state.placements.push({ id: uid('p'), truckInstanceId: truckInstance.instanceId, code, x: Math.round(x), y: Math.round(y), rotation: 0, stack: 1 });
+  const master = getProductMaster(code);
+  const foldMode = (master && master.folded) ? (state.productModes[code] || 'folded') : undefined;
+  state.placements.push({ id: uid('p'), truckInstanceId: truckInstance.instanceId, code, x: Math.round(x), y: Math.round(y), rotation: 0, stack: 1, foldMode });
   pickedCode = null;
   renderProductList();
   renderCanvases();
@@ -910,10 +951,36 @@ function clampToCargo(x, y, fp, m) {
   return { x, y };
 }
 
+const SNAP_THRESHOLD = 25;   // mm: この距離以内なら磁石のように吸着させる
+/**
+ * rect(x,y,w,h)を、同じトラック内の他商品の辺や荷台の壁に磁石のように吸着させた座標へ補正する。
+ * X軸・Y軸それぞれ独立に、最も近い吸着候補（相手の辺に接する／端をそろえる／壁に接する）を選ぶ。
+ * 新規配置（手入力での最初の設置）・既存配置のドラッグ移動の両方で使う。
+ */
+function snapPosition(rect, truckInstanceId, excludePid, m) {
+  const others = state.placements
+    .filter(p => p.truckInstanceId === truckInstanceId && p.id !== excludePid)
+    .map(boxRect);
+
+  const xCandidates = [0, m.cargoLength - rect.w];
+  const yCandidates = [0, m.cargoWidth - rect.h];
+  others.forEach(o => {
+    xCandidates.push(o.x - rect.w, o.x + o.w, o.x, o.x + o.w - rect.w);
+    yCandidates.push(o.y - rect.h, o.y + o.h, o.y, o.y + o.h - rect.h);
+  });
+
+  let snapX = rect.x, bestDx = SNAP_THRESHOLD;
+  xCandidates.forEach(cx => { const d = Math.abs(cx - rect.x); if (d < bestDx) { bestDx = d; snapX = cx; } });
+  let snapY = rect.y, bestDy = SNAP_THRESHOLD;
+  yCandidates.forEach(cy => { const d = Math.abs(cy - rect.y); if (d < bestDy) { bestDy = d; snapY = cy; } });
+
+  return { x: snapX, y: snapY };
+}
+
 /* -------- 当たり判定（Ver1.1 §6）: 商品同士は重ねられない -------- */
 /** 配置の占有矩形(mm)を返す */
 function boxRect(p) {
-  const fp = footprint(productInfo(p.code), p.rotation);
+  const fp = footprint(placementInfo(p), p.rotation);
   return { x: p.x, y: p.y, w: fp.lenX, h: fp.lenY };
 }
 /** 2矩形が重なるか（辺の接触は許容） */
@@ -1053,7 +1120,7 @@ function startBoxDrag(e, el, cargo, truckInstance, m) {
   const p = state.placements.find(x => x.id === el.dataset.pid);
   if (!p) return;
 
-  const info = productInfo(p.code);
+  const info = placementInfo(p);
   const fp = footprint(info, p.rotation);
   const startX = e.clientX, startY = e.clientY;
   const origX = p.x, origY = p.y;
@@ -1073,8 +1140,9 @@ function startBoxDrag(e, el, cargo, truckInstance, m) {
       el.classList.add('dragging');
       el.setPointerCapture(e.pointerId);
     }
-    curX = origX + dx / scale;
-    curY = origY + dy / scale;
+    const rawX = origX + dx / scale, rawY = origY + dy / scale;
+    // 近くの商品や壁に磁石のように吸着させる（指示書：アイテム同士がくっつきやすいように）
+    ({ x: curX, y: curY } = snapPosition({ x: rawX, y: rawY, w: fp.lenX, h: fp.lenY }, truckInstance.instanceId, p.id, m));
     el.style.left = (curX * scale) + 'px';
     el.style.top = (curY * scale) + 'px';
     const rect = { x: curX, y: curY, w: fp.lenX, h: fp.lenY };
@@ -1116,11 +1184,28 @@ function rotatePlacement(pid) {
   if (!p) return;
   const m = truckDims(state.trucks.find(t => t.instanceId === p.truckInstanceId));
   const newRot = (p.rotation === 90) ? 0 : 90;
-  const fp = footprint(productInfo(p.code), newRot);
+  const fp = footprint(placementInfo(p), newRot);
   // 回転後に荷台からはみ出す分は押し戻す（荷台外には出さない）
   const pos = clampToCargo(p.x, p.y, fp, m);
   // 縦横の切替は他商品と重なっていても常に許可する。干渉は警告バナーで示すのみ（指示書Ver.2 §6/§8）
   p.rotation = newRot;
+  p.x = pos.x; p.y = pos.y;
+  renderCanvases();
+  saveToLocal();
+}
+
+/** 折りたたみ対応商品の、この配置1個だけの折/展を切替える（商品一覧の既定値には影響しない） */
+function toggleFoldPlacement(pid) {
+  const p = state.placements.find(x => x.id === pid);
+  if (!p) return;
+  const master = getProductMaster(p.code);
+  if (!master || !master.folded) return;
+  const current = p.foldMode || state.productModes[p.code] || 'folded';
+  p.foldMode = current === 'folded' ? 'unfolded' : 'folded';
+  const m = truckDims(state.trucks.find(t => t.instanceId === p.truckInstanceId));
+  const fp = footprint(placementInfo(p), p.rotation);
+  // 寸法が変わるぶん、荷台からはみ出す分は押し戻す（他商品との重なりは警告バナーで示すのみ）
+  const pos = clampToCargo(p.x, p.y, fp, m);
   p.x = pos.x; p.y = pos.y;
   renderCanvases();
   saveToLocal();
@@ -1204,7 +1289,8 @@ function placeUnits(units, targetTruckId) {
       const best = bestFreeRectFit(free, fp0, fp90);
 
       if (best) {
-        state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
+        const foldMode = info.folded ? (state.productModes[code] || 'folded') : undefined;
+        state.placements.push({ id: uid('p'), truckInstanceId: t.instanceId, code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1, foldMode });
         placed++; placedHere = true;
         break;   // 置けたので次の候補トラックは試さない（前方＝先頭から埋める）
       }
@@ -1316,7 +1402,8 @@ function buildLayoutCandidate(units, trucks, sortFn, fitFn) {
       const free = computeFreeRectsFromList(list, m);
       const best = fitFn(free, fp0, fp90);
       if (best) {
-        list.push({ id: uid('cand'), code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1 });
+        const foldMode = info.folded ? (state.productModes[code] || 'folded') : undefined;
+        list.push({ id: uid('cand'), code, x: Math.round(best.x), y: Math.round(best.y), rotation: best.rot, stack: 1, foldMode });
         placedHere = true;
         break;
       }
@@ -1937,6 +2024,7 @@ function hydrate(obj) {
   state.placements = (obj.placements || []).map(p => ({
     id: p.id || uid('p'), truckInstanceId: p.truckInstanceId, code: p.code,
     x: p.x || 0, y: p.y || 0, rotation: p.rotation || 0, stack: p.stack || 1,
+    foldMode: p.foldMode || undefined,
   }));
   state.productModes = obj.productModes || {};
   state.materialIncluded = obj.materialIncluded || {};
