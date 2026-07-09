@@ -377,13 +377,46 @@ function renderProductMasterList() {
   // 保存ボタン（編集内容は入力のたびに自動保存済み。押すと「確定」として一覧を閉じる）
   const saveRow = document.createElement('div');
   saveRow.className = 'pm-save-row';
-  saveRow.innerHTML = `<button class="btn btn-primary" id="pmSaveBtn">保存</button>`;
+  saveRow.innerHTML = `
+    <button class="btn" id="pmExportBtn">上書き内容をエクスポート</button>
+    <button class="btn btn-primary" id="pmSaveBtn">保存</button>`;
+  saveRow.querySelector('#pmExportBtn').addEventListener('click', openProductOverridesExportModal);
   saveRow.querySelector('#pmSaveBtn').addEventListener('click', () => {
     accOpen.pm = false;
     renderProductMasterAccordion();
     toast('商品マスターを保存しました');
   });
   host.appendChild(saveRow);
+}
+
+/** 現在のPRODUCT_OVERRIDES（この端末での編集差分）をJSONで表示し、コピーできるようにする */
+function openProductOverridesExportModal() {
+  const json = JSON.stringify(PRODUCT_OVERRIDES, null, 2);
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  mask.innerHTML = `
+    <div class="modal relayout-modal">
+      <h3>上書き内容のエクスポート</h3>
+      <p class="modal-message">この端末で商品マスターに加えた編集差分（PRODUCT_OVERRIDES）です。コピーして共有してください。</p>
+      <textarea class="pm-export-textarea" readonly>${json}</textarea>
+      <div class="modal-actions">
+        <button class="btn" data-cancel>閉じる</button>
+        <button class="btn btn-primary" data-copy>コピー</button>
+      </div>
+    </div>`;
+  const close = () => mask.remove();
+  mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+  mask.querySelector('[data-cancel]').addEventListener('click', close);
+  mask.querySelector('[data-copy]').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(json);
+      toast('クリップボードにコピーしました');
+    } catch (_) {
+      mask.querySelector('.pm-export-textarea').select();
+      toast('選択済みです。Cmd+C（Ctrl+C）でコピーしてください');
+    }
+  });
+  document.body.appendChild(mask);
 }
 
 /**
