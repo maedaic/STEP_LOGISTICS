@@ -528,18 +528,27 @@ function buildProductRow(code, qtyInSource, matchInfo) {
 function renderProductList() {
   const host = document.getElementById('productList');
   const autoBtn = document.getElementById('btnAutoPlace');
-  host.innerHTML = '';
+  // host.innerHTML の総入れ替えでフォーカス中の要素が消えると、ブラウザが
+  // ページ最上部へ自動スクロールしてしまうことがある（Safari等）。
+  // スクロール位置を保存し、再描画後に復元してこの「引き戻り」を防ぐ。
+  const scrollX = window.scrollX, scrollY = window.scrollY;
+  const rightPanel = document.querySelector('.panel-right');
+  const rightScrollTop = rightPanel ? rightPanel.scrollTop : 0;
+  if (document.activeElement && host.contains(document.activeElement)) document.activeElement.blur();
 
-  if (state.slips.length === 0 && state.manual.length === 0) {
-    host.innerHTML = `<div class="product-empty">
-      <b>まだ商品がありません</b>
-      左側から<div class="empty-types"><span class="chip">写真</span><span class="chip">PDF</span></div>
-      をアップロードしてください。<br>（手入力でも追加できます）
-    </div>`;
-    if (autoBtn) autoBtn.hidden = true;
-    return;
-  }
-  if (autoBtn) autoBtn.hidden = false;
+  try {
+    host.innerHTML = '';
+
+    if (state.slips.length === 0 && state.manual.length === 0) {
+      host.innerHTML = `<div class="product-empty">
+        <b>まだ商品がありません</b>
+        左側から<div class="empty-types"><span class="chip">写真</span><span class="chip">PDF</span></div>
+        をアップロードしてください。<br>（手入力でも追加できます）
+      </div>`;
+      if (autoBtn) autoBtn.hidden = true;
+      return;
+    }
+    if (autoBtn) autoBtn.hidden = false;
 
   // 伝票ごとにグループ表示（同一品番でも合算せず伝票単位を維持）
   state.slips.forEach((s, idx) => {
@@ -621,6 +630,10 @@ function renderProductList() {
     });
     host.appendChild(group);
   }
+  } finally {
+    window.scrollTo(scrollX, scrollY);
+    if (rightPanel) rightPanel.scrollTop = rightScrollTop;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -628,6 +641,15 @@ function renderProductList() {
  * ------------------------------------------------------------------------- */
 function renderCanvases() {
   const host = document.getElementById('truckCanvases');
+  // host.innerHTML の総入れ替えでフォーカス中の要素（回転/折/削除ボタンなど）が消えると、
+  // ブラウザがページ最上部へ自動スクロールしてしまうことがある（Safari等）。
+  // スクロール位置を保存し、再描画後に復元してこの「引き戻り」を防ぐ。
+  const scrollX = window.scrollX, scrollY = window.scrollY;
+  const rightPanel = document.querySelector('.panel-right');
+  const rightScrollTop = rightPanel ? rightPanel.scrollTop : 0;
+  if (document.activeElement && host.contains(document.activeElement)) document.activeElement.blur();
+
+  try {
   host.innerHTML = '';
   if (state.trucks.length === 0) {
     host.innerHTML = `<div class="empty-hint"><b>トラックが選択されていません</b><br>左側からトラックを選択してください</div>`;
@@ -694,6 +716,10 @@ function renderCanvases() {
     host.appendChild(block);
     layoutCargo(block, t, mode);
   });
+  } finally {
+    window.scrollTo(scrollX, scrollY);
+    if (rightPanel) rightPanel.scrollTop = rightScrollTop;
+  }
 }
 
 /**
