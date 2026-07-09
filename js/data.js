@@ -159,12 +159,60 @@ function setProductOverride(code, field, value) {
   saveProductOverrides();
 }
 
-/** 商品マスターから1件取得（上書き済みの詳細があればマージして返す） */
+/** マスター未収録の型式に、色を安定的に割り当てる（同じ型式には常に同じ色） */
+const CUSTOM_PRODUCT_PALETTE = ['#0ea5e9', '#16a34a', '#d97706', '#9333ea', '#dc2626', '#0891b2', '#ca8a04', '#4f46e5', '#059669', '#7c3aed'];
+function colorForCode(code) {
+  let hash = 0;
+  for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
+  return CUSTOM_PRODUCT_PALETTE[hash % CUSTOM_PRODUCT_PALETTE.length];
+}
+
+/** PRODUCT_MASTERに無く、商品マスター編集画面から新規登録された型式の一覧（指示書②） */
+function customProductCodes() {
+  return Object.keys(PRODUCT_OVERRIDES).filter(code =>
+    !PRODUCT_MASTER.some(p => p.code === code) &&
+    PRODUCT_OVERRIDES[code].width && PRODUCT_OVERRIDES[code].depth && PRODUCT_OVERRIDES[code].height);
+}
+
+/**
+ * マスター未収録の型式を新規登録する（指示書②）。以後 getProductMaster/OCR照合で解決できるようになる。
+ * fields: { name, width, depth, height, stackable, maxStack, category }
+ */
+function registerCustomProduct(code, fields) {
+  code = String(code || '').trim().toUpperCase();
+  if (!code) return { ok: false, error: '型式を入力してください' };
+  if (PRODUCT_MASTER.some(p => p.code === code)) return { ok: false, error: 'この型式は既にマスターに登録されています' };
+  if (!fields.name) return { ok: false, error: '商品名を入力してください' };
+  if (!fields.width || !fields.depth || !fields.height) return { ok: false, error: '幅・奥行・高さをすべて入力してください' };
+  PRODUCT_OVERRIDES[code] = {
+    name: fields.name,
+    width: fields.width, depth: fields.depth, height: fields.height,
+    stackable: fields.stackable ?? null, maxStack: fields.maxStack ?? 1,
+    category: fields.category || '未分類（手動登録）',
+    color: colorForCode(code),
+  };
+  saveProductOverrides();
+  return { ok: true, code };
+}
+
+/** 新規登録した商品をマスターから削除する（PRODUCT_MASTER本体の商品は削除できない） */
+function removeCustomProduct(code) {
+  if (PRODUCT_MASTER.some(p => p.code === code)) return;
+  delete PRODUCT_OVERRIDES[code];
+  saveProductOverrides();
+}
+
+/**
+ * 商品マスターから1件取得（上書き済みの詳細があればマージして返す）。
+ * PRODUCT_MASTERに無い型式でも、新規登録済み（幅・奥行・高さが揃っている）なら
+ * それ単体で1件のマスターとして返す（指示書②：保存すると以後OCRでも自動認識）。
+ */
 function getProductMaster(code) {
   const base = PRODUCT_MASTER.find(p => p.code === code);
-  if (!base) return null;
   const ov = PRODUCT_OVERRIDES[code];
-  return ov ? { ...base, ...ov } : base;
+  if (base) return ov ? { ...base, ...ov } : base;
+  if (ov && ov.width && ov.depth && ov.height) return { code, ...ov };
+  return null;
 }
 
 /** トラックマスターから1件取得 */

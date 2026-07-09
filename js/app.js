@@ -209,29 +209,49 @@ function renderProductMasterAccordion() {
   if (open) renderProductMasterList();
 }
 
-function renderProductMasterList() {
-  const host = document.getElementById('productMasterList');
-  if (!host) return;
-  host.innerHTML = '';
-  let lastCategory = null;
-  PRODUCT_MASTER.forEach((base) => {
-    const m = getProductMaster(base.code);
-    if (m.category !== lastCategory) {
-      lastCategory = m.category;
-      const cat = document.createElement('div');
-      cat.className = 'pm-cat';
-      cat.textContent = m.category || '未分類';
-      host.appendChild(cat);
-    }
+/** 商品マスター1件ぶんの編集行（既存マスター品・新規登録品の両方で共用）を組み立てる（指示書①） */
+function buildProductMasterRow(base, isCustom) {
+  const m = getProductMaster(base.code);
+  const row = document.createElement('div');
+  row.className = 'pm-row';
 
-    const row = document.createElement('div');
-    row.className = 'pm-row';
+  const info = document.createElement('span');
+  info.className = 'pm-info';
+  info.innerHTML = `<span class="pm-code">${m.code}</span>`;
+  row.appendChild(info);
 
-    const info = document.createElement('span');
-    info.className = 'pm-info';
-    info.innerHTML = `<span class="pm-code">${m.code}</span><span class="pm-name">${m.name}</span>`;
-    row.appendChild(info);
+  const nameField = document.createElement('label');
+  nameField.className = 'pm-field pm-field-name';
+  nameField.innerHTML = `<span>商品名</span>`;
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.value = m.name || '';
+  nameInput.addEventListener('change', () => {
+    setProductOverride(m.code, 'name', nameInput.value.trim() || null);
+    renderProductMasterAccordion();
+  });
+  nameField.appendChild(nameInput);
+  row.appendChild(nameField);
 
+  [['width', '幅W'], ['depth', '奥行D'], ['height', '高さH']].forEach(([field, label]) => {
+    const f = document.createElement('label');
+    f.className = 'pm-field pm-field-dim';
+    f.innerHTML = `<span>${label}</span>`;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.placeholder = '不明';
+    input.value = m[field] != null ? m[field] : '';
+    input.addEventListener('change', () => {
+      const v = input.value.trim();
+      setProductOverride(m.code, field, v === '' ? null : Math.max(0, parseFloat(v)));
+      renderProductMasterAccordion();
+    });
+    f.appendChild(input);
+    row.appendChild(f);
+  });
+
+  {
     const stackField = document.createElement('label');
     stackField.className = 'pm-field';
     stackField.innerHTML = `<span>積み重ね</span>`;
@@ -265,9 +285,94 @@ function renderProductMasterList() {
     });
     maxStackField.appendChild(maxStackInput);
     row.appendChild(maxStackField);
+  }
 
-    host.appendChild(row);
+  if (isCustom) {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'pm-del-btn';
+    delBtn.textContent = '削除';
+    delBtn.title = 'この新規登録商品をマスターから削除する';
+    delBtn.addEventListener('click', () => {
+      removeCustomProduct(m.code);
+      renderProductMasterAccordion();
+    });
+    row.appendChild(delBtn);
+  }
+
+  return row;
+}
+
+function renderProductMasterList() {
+  const host = document.getElementById('productMasterList');
+  if (!host) return;
+  host.innerHTML = '';
+  let lastCategory = null;
+  PRODUCT_MASTER.forEach((base) => {
+    const m = getProductMaster(base.code);
+    if (m.category !== lastCategory) {
+      lastCategory = m.category;
+      const cat = document.createElement('div');
+      cat.className = 'pm-cat';
+      cat.textContent = m.category || '未分類';
+      host.appendChild(cat);
+    }
+    host.appendChild(buildProductMasterRow(base, false));
   });
+
+  // 新規登録した商品（マスター未収録の型式・指示書②）
+  const customCodes = customProductCodes();
+  if (customCodes.length > 0) {
+    const cat = document.createElement('div');
+    cat.className = 'pm-cat';
+    cat.textContent = '新規登録した商品';
+    host.appendChild(cat);
+    customCodes.forEach(code => host.appendChild(buildProductMasterRow({ code }, true)));
+  }
+
+  // 新しい商品を登録するフォーム（指示書②：マスター未登録・サイズ未登録の商品をここから登録）
+  const addForm = document.createElement('div');
+  addForm.className = 'pm-add-form';
+  addForm.innerHTML = `
+    <div class="pm-add-title">＋ 新しい商品を登録</div>
+    <div class="pm-add-row">
+      <input class="pm-add-code" type="text" placeholder="型式（例: C99）">
+      <input class="pm-add-name" type="text" placeholder="商品名">
+    </div>
+    <div class="pm-add-row">
+      <input class="pm-add-w" type="number" min="0" placeholder="幅W">
+      <input class="pm-add-d" type="number" min="0" placeholder="奥行D">
+      <input class="pm-add-h" type="number" min="0" placeholder="高さH">
+    </div>
+    <div class="pm-add-row">
+      <select class="pm-add-stack">
+        <option value="">積み重ね：不明</option>
+        <option value="true">積み重ね：可</option>
+        <option value="false">積み重ね：不可</option>
+      </select>
+      <input class="pm-add-maxstack" type="number" min="1" placeholder="最大段数">
+    </div>
+    <button class="btn btn-primary pm-add-btn">登録する</button>`;
+  addForm.querySelector('.pm-add-btn').addEventListener('click', () => {
+    const code = addForm.querySelector('.pm-add-code').value;
+    const name = addForm.querySelector('.pm-add-name').value.trim();
+    const width = parseFloat(addForm.querySelector('.pm-add-w').value);
+    const depth = parseFloat(addForm.querySelector('.pm-add-d').value);
+    const height = parseFloat(addForm.querySelector('.pm-add-h').value);
+    const stackVal = addForm.querySelector('.pm-add-stack').value;
+    const maxStackVal = addForm.querySelector('.pm-add-maxstack').value;
+    const result = registerCustomProduct(code, {
+      name, width, depth, height,
+      stackable: stackVal === '' ? null : stackVal === 'true',
+      maxStack: maxStackVal ? Math.max(1, parseInt(maxStackVal, 10)) : 1,
+    });
+    if (!result.ok) { toast(result.error); return; }
+    toast(`「${result.code}」を商品マスターへ登録しました`);
+    rebuildProducts();
+    renderProductMasterAccordion();
+    renderProductList();
+    renderCanvases();
+  });
+  host.appendChild(addForm);
 
   // 保存ボタン（編集内容は入力のたびに自動保存済み。押すと「確定」として一覧を閉じる）
   const saveRow = document.createElement('div');
@@ -365,9 +470,16 @@ function rebuildProducts() {
       const dims = effectiveMasterDims(master);
       products.push({ code, name: master.name, width: dims.width, depth: dims.depth, height: dims.height, qty: v.qty, color: master.color, stackable: master.stackable, maxStack: master.maxStack, foldable: !!master.folded });
     } else if (v.def) {
-      products.push({ code, name: v.def.name, width: v.def.width, depth: v.def.depth, height: v.def.height, qty: v.qty, color: v.def.color, stackable: null, maxStack: 1 });
+      const hasDims = v.def.width && v.def.depth && v.def.height;
+      products.push({
+        code, name: v.def.name,
+        width: v.def.width || 400, depth: v.def.depth || 400, height: v.def.height || 400,
+        qty: v.qty, color: v.def.color || pickColor(ci), stackable: null, maxStack: 1,
+        sizeUnknown: !hasDims || !!v.def.sizeUnknown,
+      });
     } else {
-      products.push({ code, name: code, width: 400, depth: 400, height: 400, qty: v.qty, color: pickColor(ci), stackable: null, maxStack: 1 });
+      // マスター未登録・サイズ未登録（指示書②③）。400は暫定の仮サイズで、実寸ではないことを明示する
+      products.push({ code, name: code, width: 400, depth: 400, height: 400, qty: v.qty, color: pickColor(ci), stackable: null, maxStack: 1, sizeUnknown: true });
     }
     ci++;
   });
@@ -500,7 +612,7 @@ function buildProductRow(code, qtyInSource, matchInfo) {
         <span class="pr-code">${code}</span>
         <span class="pr-qty">×${qtyInSource}</span>
       </div>
-      <div class="pr-name">${info.name}　${info.width}×${info.depth}×${info.height}</div>
+      <div class="pr-name">${info.name}　${info.sizeUnknown ? '<span class="pr-size-unknown">サイズ未設定</span>' : `${info.width}×${info.depth}×${info.height}`}</div>
       ${ocrBadge}
       ${foldToggle}
       <div class="pr-remain ${rem <= 0 ? 'is-zero' : ''}">残${rem}</div>`;
@@ -669,6 +781,15 @@ function renderCanvases() {
     const banner = document.createElement('div');
     banner.className = 'residual-banner';
     banner.innerHTML = `⚠ 積み残しがあります：${residual.map(x => `${x.label} ×${x.rem}`).join('、')}`;
+    host.appendChild(banner);
+  }
+
+  // サイズ未設定の商品がある場合の警告（指示書③：商品マスター改善）
+  const sizeUnknownCodes = state.products.filter(p => p.sizeUnknown).map(p => p.code);
+  if (sizeUnknownCodes.length > 0) {
+    const banner = document.createElement('div');
+    banner.className = 'residual-banner';
+    banner.innerHTML = `⚠ サイズ未設定の商品があります：${sizeUnknownCodes.join('、')}（左の「商品マスター」から登録してください）`;
     host.appendChild(banner);
   }
 
@@ -1693,15 +1814,16 @@ function toHalfWidth(s) {
 function normalizeCode(raw) {
   return toHalfWidth(raw).replace(/\s+/g, '').toUpperCase();
 }
-/** 正規化してマスターの正式品番に解決。見つからなければ正規化文字列を返す */
+/** 正規化してマスターの正式品番に解決。見つからなければ正規化文字列を返す（新規登録した型式も対象）*/
 function resolveProductCode(raw) {
   const n = normalizeCode(raw);
   if (!n) return '';
-  let m = PRODUCT_MASTER.find(p => p.code.toUpperCase() === n);
-  if (m) return m.code;
+  const codes = [...PRODUCT_MASTER.map(p => p.code), ...customProductCodes()];
+  let hit = codes.find(c => c.toUpperCase() === n);
+  if (hit) return hit;
   const nh = n.replace(/-/g, '');                 // ハイフン有無を吸収
-  m = PRODUCT_MASTER.find(p => p.code.toUpperCase().replace(/-/g, '') === nh);
-  return m ? m.code : n;
+  hit = codes.find(c => c.toUpperCase().replace(/-/g, '') === nh);
+  return hit || n;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1746,17 +1868,18 @@ function matchOcrLine(line) {
     return { code: normalizeCode(rawCode) || rawCode, qty, def: { name: rawName || '部材' }, method: 'material', confidence: 1, rawName };
   }
 
-  // ①品番として一致するか（読み取れていれば最優先・確実）
+  // ①品番として一致するか（読み取れていれば最優先・確実。新規登録した型式も対象＝指示書②④）
   if (rawCode) {
     const resolved = resolveProductCode(rawCode);
-    const exact = PRODUCT_MASTER.find(p => p.code === resolved);
+    const exact = getProductMaster(resolved);
     if (exact) return { code: exact.code, qty, method: 'code', confidence: 1, rawName };
   }
 
-  // ②品番が無い/一致しない場合は商品名の近似一致で補正
+  // ②品番が無い/一致しない場合は商品名の近似一致で補正（新規登録した型式も対象）
   if (rawName) {
+    const candidates = [...PRODUCT_MASTER, ...customProductCodes().map(getProductMaster)];
     let best = null, bestScore = 0;
-    PRODUCT_MASTER.forEach(p => {
+    candidates.forEach(p => {
       const score = nameSimilarity(rawName, p.name);
       if (score > bestScore) { bestScore = score; best = p; }
     });
@@ -1792,8 +1915,8 @@ function addItemToTarget(target, rawCode, qty) {
       exist.qty += qty;
     } else {
       const master = getProductMaster(code);
-      const def = master ? null : { name: code, width: 400, depth: 400, height: 400, color: pickColor(state.products.length) };
-      if (!master) toast(`「${code}」はマスター未登録のため仮サイズ(400)で追加しました`);
+      const def = master ? null : { name: code, width: 400, depth: 400, height: 400, color: pickColor(state.products.length), sizeUnknown: true };
+      if (!master) toast(`「${code}」はサイズ未設定です。商品マスターから登録してください`);
       state.manual.push({ id: uid('m'), code, qty, def });
     }
   }
