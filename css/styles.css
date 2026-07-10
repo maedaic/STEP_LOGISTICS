@@ -46,6 +46,13 @@ input, textarea { font-family: inherit; }
 }
 .side-brand { font-weight: 700; font-size: 15px; color: #fff; padding: 0 20px 20px; letter-spacing: .02em; white-space: nowrap; }
 .side-brand span { color: var(--blue); }
+/* Dashboardへの戻るボタン（一旦はこれだけ。モジュール自身のサイドバーには他モジュールへの直リンクを増やさない方針） */
+.back-btn {
+  display: flex; align-items: center; gap: 6px; margin: 0 20px 16px; padding: 7px 12px;
+  border-radius: 8px; background: #232939; border: 1px solid #2a3040;
+  color: #cfd3dc; font-size: 12.5px; text-decoration: none; width: fit-content;
+}
+.back-btn:hover { color: #fff; border-color: #3a4150; }
 .side-item {
   display: flex; align-items: center; gap: 10px; padding: 9px 20px; font-size: 13.5px; color: #cfd3dc;
   text-decoration: none; white-space: nowrap; border: none; background: none; width: 100%; text-align: left;
