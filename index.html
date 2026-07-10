@@ -3,167 +3,72 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>STEP Studio — 配送レイアウト</title>
+  <title>STEP Studio — Logistics</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <nav class="side-nav">
+    <div class="side-brand">STEP Studio <span>Logistics</span></div>
+    <button class="side-item is-active">
+      <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9l7-6 7 6"/><path d="M5 8v9h10V8"/></svg>
+      Home
+    </button>
+    <a class="side-item" href="loading.html" title="積載プランナーを開く">
+      <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="9" width="9" height="6" rx="1"/><path d="M11 11h4l3 3v1h-7z"/><circle cx="6" cy="16.5" r="1.3"/><circle cx="15" cy="16.5" r="1.3"/></svg>
+      積載
+    </a>
+    <a class="side-item is-disabled" title="準備中">
+      <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h11M14 7l-3-3M14 7l-3 3"/></svg>
+      配送
+    </a>
+    <a class="side-item is-disabled" title="準備中">
+      <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="15" r="2"/><circle cx="15" cy="15" r="2"/><path d="M3 15V6h9l4 4v5"/></svg>
+      配車
+    </a>
+    <a class="side-item is-disabled" title="準備中">
+      <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.5"/><path d="M10 3v2M10 15v2M17 10h-2M5 10H3M15 5l-1.4 1.4M6.4 13.6L5 15M15 15l-1.4-1.4M6.4 6.4L5 5"/></svg>
+      Settings
+    </a>
+  </nav>
 
-  <!-- ===================== ヘッダー ===================== -->
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-logo"></span>
-      <span class="brand-name">STEP Studio</span>
-      <span class="brand-sub">配送レイアウト</span>
-    </div>
-    <div class="topbar-project">
-      案件名：<input id="projectName" class="project-input" type="text" value="新規案件" placeholder="案件名を入力">
-    </div>
-    <div class="topbar-actions">
-      <span class="autosave">
-        <button class="btn" id="btnAutoSave">自動保存 OFF</button>
-        <span class="autosave-status" id="autoSaveStatus"></span>
-      </span>
-      <button class="btn" id="btnClearAll">全消去</button>
-      <button class="btn btn-primary" id="btnPdf">PDF出力</button>
-    </div>
-  </header>
+  <div class="app-content">
+    <main class="home-main">
+      <h1 class="home-title">Home</h1>
+      <div class="home-grid">
+        <div class="home-card home-card-wide">
+          <h2>積載</h2>
+          <div id="homeLoadingStatus" class="home-empty"></div>
+          <p style="margin-top:12px;"><a class="btn btn-primary" href="loading.html">積載プランナーを開く</a></p>
+        </div>
 
-  <!-- ===================== メイン3カラム ===================== -->
-  <main class="layout">
-
-    <!-- 左：トラック一覧（折りたたみ） → 商品アップロード → 手入力 -->
-    <aside class="panel panel-left">
-      <!-- ① トラック一覧（STEP車両 / 業者トラックの2グループ・折りたたみ） -->
-      <div class="truck-accordion">
-        <button class="accordion-head" id="stepAccHead" aria-expanded="false">
-          <span class="acc-caret">▶</span>
-          <span class="acc-title">STEP車両</span>
-          <span class="acc-count" id="stepAccCount"></span>
-        </button>
-        <div class="accordion-body" id="stepAccBody" hidden>
-          <div class="truck-master-list" id="truckListStep"><!-- JSで生成 --></div>
+        <div class="home-card placeholder-card">
+          <h2>今日配送<span class="placeholder-badge">準備中</span></h2>
+          <div class="home-empty">複数配送案件を横断管理する機能はまだありません。</div>
+        </div>
+        <div class="home-card placeholder-card">
+          <h2>積込待ち<span class="placeholder-badge">準備中</span></h2>
+          <div class="home-empty">この機能はまだ実装されていません。</div>
+        </div>
+        <div class="home-card placeholder-card">
+          <h2>トラック状況<span class="placeholder-badge">準備中</span></h2>
+          <div class="home-empty">この機能はまだ実装されていません。</div>
+        </div>
+        <div class="home-card placeholder-card">
+          <h2>ドライバー状況<span class="placeholder-badge">準備中</span></h2>
+          <div class="home-empty">この機能はまだ実装されていません。</div>
         </div>
       </div>
-      <div class="truck-accordion">
-        <button class="accordion-head" id="gaishaAccHead" aria-expanded="false">
-          <span class="acc-caret">▶</span>
-          <span class="acc-title">業者トラック</span>
-          <span class="acc-count" id="gaishaAccCount"></span>
-        </button>
-        <div class="accordion-body" id="gaishaAccBody" hidden>
-          <div class="truck-master-list" id="truckListGaisha"><!-- JSで生成 --></div>
-        </div>
-      </div>
+    </main>
+  </div>
 
-      <!-- 商品マスター（重量・積み重ね可否など、詳細不明部分を後から記入できる編集欄） -->
-      <div class="truck-accordion">
-        <button class="accordion-head" id="pmAccHead" aria-expanded="false">
-          <span class="acc-caret">▶</span>
-          <span class="acc-title">商品マスター（詳細を編集）</span>
-          <span class="acc-count" id="pmAccCount"></span>
-        </button>
-        <div class="accordion-body" id="pmAccBody" hidden>
-          <div class="product-master-list" id="productMasterList"><!-- JSで生成 --></div>
-        </div>
-      </div>
-
-      <!-- ② 商品アップロード（複数・サムネイル管理） -->
-      <div class="section-title">商品アップロード</div>
-      <div class="upload-box" id="uploadBox">
-        <div class="upload-plus">＋ 写真／PDFを追加</div>
-        <div class="upload-types">
-          <span class="chip">写真</span>
-          <span class="chip">PDF</span>
-          <span class="chip">複数可</span>
-        </div>
-        <div class="upload-hint">伝票を撮影／PDFで読込（混在可）</div>
-        <input type="file" id="fileSlip" accept="image/*,application/pdf" multiple hidden>
-      </div>
-      <div id="slipList"><!-- アップロード済み伝票のサムネイル一覧 --></div>
-
-      <!-- ③ 手入力（OCRできない商品用・追加先の伝票を選択）LEFT-005 -->
-      <div class="manual-box">
-        <div class="section-title">手入力（品番・数量）</div>
-        <div class="manual-field manual-slip">
-          <label for="manSlip">追加先の伝票</label>
-          <select id="manSlip"><!-- JSで生成 --></select>
-        </div>
-        <div class="manual-row">
-          <div class="manual-field">
-            <label for="manCode">品番</label>
-            <input id="manCode" type="text" placeholder="C6 / c-6 / Ｃ６ など">
-          </div>
-          <div class="manual-field manual-qty">
-            <label for="manQty">数量</label>
-            <input id="manQty" type="number" value="1" min="1">
-          </div>
-          <button class="btn btn-primary manual-add" id="btnManualAdd">追加</button>
-        </div>
-      </div>
-
-      <!-- ④ 商品マスター反映状況（カテゴリ一括反映の可視化） -->
-      <div class="reflected-box">
-        <div class="section-title">商品マスター反映状況</div>
-        <div id="reflectedCategoryList"><!-- JSで生成 --></div>
-      </div>
-    </aside>
-
-    <!-- 中央：荷台キャンバス -->
-    <section class="panel panel-center">
-      <div class="center-head">
-        <div class="center-title">選択中のトラック</div>
-      </div>
-
-      <div id="truckCanvases"><!-- JSで生成 --></div>
-
-      <button class="add-truck-dashed" id="btnAddTruckDashed">＋ トラック追加</button>
-    </section>
-
-    <!-- 右：商品一覧 / OCR結果 -->
-    <aside class="panel panel-right">
-      <div class="right-head">
-        <span class="section-title">伝票一覧</span>
-        <span class="right-sub">OCR読込結果</span>
-      </div>
-      <div id="productList"><!-- JSで生成 --></div>
-      <button class="add-ocr-link" id="btnAddOcr">＋ 伝票を追加読込</button>
-      <button class="btn btn-primary auto-place-btn" id="btnAutoPlace" hidden>トラックへ積む（自動配置）</button>
-    </aside>
-  </main>
-
-  <!-- ===================== 下部ヘルプ ===================== -->
-  <footer class="helpbar">
-    <div class="help-col">
-      <div class="help-title">操作方法</div>
-      <ol>
-        <li>商品をアップロード（写真／PDF）→ OCRで品番・数量を読取</li>
-        <li>左のトラックをクリックして荷台を表示（再クリックで削除・業者4tは複数追加）</li>
-        <li>商品を実寸のままドラッグ／クリックで荷台へ配置</li>
-        <li>残数を確認しながらPDFを出力・印刷</li>
-      </ol>
-    </div>
-    <div class="help-col">
-      <div class="help-title">表示の見方</div>
-      <ul>
-        <li><span class="legend-box"></span> 商品（幅×奥行の実寸比率で描画）</li>
-        <li>数字目盛：荷台内寸のmm位置（実寸スケール）</li>
-        <li>寸法表記：幅×奥行×高さ（mm）</li>
-      </ul>
-    </div>
-    <div class="help-col">
-      <div class="help-title">注意事項</div>
-      <ul>
-        <li>品番は変えず、配置ごとに残数のみ自動更新されます</li>
-        <li>商品同士は重ねられません（重なる位置は赤枠・配置不可）</li>
-        <li>荷台の外へは配置できません／積載率判定はMVP対象外です</li>
-      </ul>
-    </div>
-  </footer>
-
-  <!-- ===================== PDF印刷用レイアウト（画面では非表示） ===================== -->
-  <div id="printArea" class="print-area"><!-- JSで生成 --></div>
-
-  <script src="js/data.js"></script>
-  <script src="js/app.js"></script>
+  <script>
+    // stepstudio_delivery_project は積載プランナー(loading.html)が使う唯一のセッション状態キー。
+    // 複数案件の一覧管理は無いため、「保存済みプランの有無」だけを正直に示す。
+    var saved = null;
+    try { saved = localStorage.getItem('stepstudio_delivery_project'); } catch (_) { /* ignore */ }
+    document.getElementById('homeLoadingStatus').textContent = saved
+      ? '保存済みの積載プランがあります。'
+      : 'まだ保存された積載プランはありません。';
+  </script>
 </body>
 </html>

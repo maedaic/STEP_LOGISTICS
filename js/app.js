@@ -763,6 +763,10 @@ function buildProductRow(code, qtyInSource, matchInfo) {
   return row;
 }
 
+/** Module Home導入でページ本体のスクロールはwindowではなく#appContent（新設のフレックス子要素）が担うため、
+ * スクロール位置の保存/復元もこちらを基準にする（旧: window.scrollX/scrollY/scrollTo）。 */
+function pageScrollEl() { return document.getElementById('appContent') || document.documentElement; }
+
 /* ---------- 右：商品一覧（伝票単位で表示・在庫は内部集計）RIGHT-002 ---------- */
 function renderProductList() {
   const host = document.getElementById('productList');
@@ -770,7 +774,8 @@ function renderProductList() {
   // host.innerHTML の総入れ替えでフォーカス中の要素が消えると、ブラウザが
   // ページ最上部へ自動スクロールしてしまうことがある（Safari等）。
   // スクロール位置を保存し、再描画後に復元してこの「引き戻り」を防ぐ。
-  const scrollX = window.scrollX, scrollY = window.scrollY;
+  const scrollEl = pageScrollEl();
+  const scrollLeft = scrollEl.scrollLeft, scrollTop = scrollEl.scrollTop;
   const rightPanel = document.querySelector('.panel-right');
   const rightScrollTop = rightPanel ? rightPanel.scrollTop : 0;
   if (document.activeElement && host.contains(document.activeElement)) document.activeElement.blur();
@@ -870,7 +875,7 @@ function renderProductList() {
     host.appendChild(group);
   }
   } finally {
-    window.scrollTo(scrollX, scrollY);
+    scrollEl.scrollLeft = scrollLeft; scrollEl.scrollTop = scrollTop;
     if (rightPanel) rightPanel.scrollTop = rightScrollTop;
   }
 }
@@ -883,7 +888,8 @@ function renderCanvases() {
   // host.innerHTML の総入れ替えでフォーカス中の要素（回転/折/削除ボタンなど）が消えると、
   // ブラウザがページ最上部へ自動スクロールしてしまうことがある（Safari等）。
   // スクロール位置を保存し、再描画後に復元してこの「引き戻り」を防ぐ。
-  const scrollX = window.scrollX, scrollY = window.scrollY;
+  const scrollEl = pageScrollEl();
+  const scrollLeft = scrollEl.scrollLeft, scrollTop = scrollEl.scrollTop;
   const rightPanel = document.querySelector('.panel-right');
   const rightScrollTop = rightPanel ? rightPanel.scrollTop : 0;
   if (document.activeElement && host.contains(document.activeElement)) document.activeElement.blur();
@@ -968,7 +974,7 @@ function renderCanvases() {
     layoutCargo(block, t, mode);
   });
   } finally {
-    window.scrollTo(scrollX, scrollY);
+    scrollEl.scrollLeft = scrollLeft; scrollEl.scrollTop = scrollTop;
     if (rightPanel) rightPanel.scrollTop = rightScrollTop;
   }
 }
