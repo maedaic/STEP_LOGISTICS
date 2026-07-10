@@ -3,17 +3,18 @@
  *
  * すべて実寸(mm)・実重(kg)で保持する。UIはこの実寸データの可視化にすぎない。
  *
- * ★正本（Source of Truth）は data/ 配下のJSONファイル：
- *     data/vehicle-master.json  ← TRUCK_MASTER の正本
- *     data/product-master.json  ← PRODUCT_MASTER の正本（STEP Studio全体で共通利用）
+ * ★正本（Source of Truth）は company/master/ 配下のJSONファイル（Architecture Ver1.0で統一）：
+ *     company/master/vehicles.json  ← TRUCK_MASTER の正本
+ *     company/master/products.json  ← PRODUCT_MASTER の正本（STEP Studio全体で共通利用）
  *   将来「Settings」モジュールが持つ共通マスターの土台となる想定のため、
- *   実寸の追加・修正はまず data/*.json 側を直し、このファイルへ反映すること。
+ *   実寸の追加・修正はまず company/master/*.json 側を直し、このファイルへ反映すること。
  *   このファイルには、アプリ描画専用の追加項目（color, group, viewMode用の
  *   external/placeholder フラグ等）が乗っている点でJSONそのものとは異なる。
+ *   （このファイル自体はJSONを直接fetchせず、手動転記したJS配列を保持している）
  * ======================================================================= */
 
 /**
- * トラックマスター（正本: data/vehicle-master.json）
+ * トラックマスター（正本: company/master/vehicles.json）
  * group   : 'step'（STEP車両）| 'gaisha'（業者トラック）
  * cargo*  : 荷台内寸(mm)   ← レイアウト描画・寸法表示(D/W/H)の基準
  *           D=cargoLength（長さ/奥行）, W=cargoWidth（幅）, H=cargoHeight（高さ）
@@ -22,7 +23,7 @@
  *
  * ※ 積載量目安・車外寸はUI表示から廃止（荷台寸法のみ表示）。
  * ※ 荷台内寸が実測で未確定のものは estimated:true を付けている。
- *    正確な値が分かり次第このファイルと data/vehicle-master.json の両方を更新すること。
+ *    正確な値が分かり次第このファイルと company/master/vehicles.json の両方を更新すること。
  */
 const TRUCK_MASTER = [
   // ---- STEP車両（荷台実寸: 画像②「ステップ車輌 荷台の寸法」2026-07-08 反映）----
@@ -47,7 +48,7 @@ const TRUCK_MASTER = [
 ];
 
 /**
- * 商品マスター（正本: data/product-master.json — STEP Studio全体で共通利用）
+ * 商品マスター（正本: company/master/products.json — STEP Studio全体で共通利用）
  * width  : 幅(mm)    → 上面図では荷台の長さ方向(X)に描画
  * depth  : 奥行(mm)  → 上面図では荷台の幅方向(Y)に描画
  * height : 高さ(mm)  → 側面図で使用
@@ -59,7 +60,7 @@ const TRUCK_MASTER = [
  *
  * 出典: 株式会社ステップ https://www.kk-step.jp/ （2026-07-08 取得）
  * ここはレイアウトシステムが直接使う実寸コピー。追加・修正はまず
- * data/product-master.json を直し、その後このファイルへ反映すること。
+ * company/master/products.json を直し、その後このファイルへ反映すること。
  */
 const PRODUCT_MASTER = [
   // 宝飾スタンダードケース
@@ -135,7 +136,7 @@ const PRODUCT_MASTER = [
   { code: 'C90C',    name: 'ガラスハイケース W900',         category: 'ガラスハイケース', width: 900,  depth: 500, height: 1500, price: 19800, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0284c7' },
   { code: 'C10C',    name: 'ガラスハイケース W1200',        category: 'ガラスハイケース', width: 1200, depth: 500, height: 1500, price: 22000, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0284c7' },
   { code: 'C12C',    name: 'ガラスハイケース W1200×H1800',  category: 'ガラスハイケース', width: 1200, depth: 500, height: 1800, price: 24200, weight: null, stackable: null, maxStack: 1, glass: true, color: '#0284c7' },
-  // 照明機器（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // 照明機器（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'ASP2', name: '絵画用展示パネル専用アームスポット', category: '照明機器', width: null, depth: null, height: 270, price: 2200, weight: null, stackable: null, maxStack: 1, color: '#facc15' },
   { code: 'ASP3', name: 'パネル用アームスポット', category: '照明機器', width: null, depth: null, height: 270, price: 1650, weight: null, stackable: null, maxStack: 1, color: '#facc15' },
   { code: 'SP1R', name: 'スタンドスポット', category: '照明機器', width: null, depth: null, height: null, price: 6600, weight: null, stackable: null, maxStack: 1, color: '#facc15' },
@@ -146,7 +147,7 @@ const PRODUCT_MASTER = [
   { code: 'TSPC', name: '卓上スポット(アダプター式)', category: '照明機器', width: null, depth: null, height: null, price: 1650, weight: null, stackable: null, maxStack: 1, color: '#facc15' },
   { code: 'TSPL', name: '卓上スポット(バッテリー式)', category: '照明機器', width: null, depth: null, height: null, price: 1650, weight: null, stackable: null, maxStack: 1, color: '#facc15' },
   { code: 'TSPW', name: 'コンセント型卓上スポット', category: '照明機器', width: 100, depth: 161, height: null, price: 1650, weight: null, stackable: null, maxStack: 1, color: '#facc15' },
-  // パネル（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // パネル（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'BSシリーズ', name: 'ベルトパーテーション', category: 'パネル', width: null, depth: null, height: null, price: 3300, weight: null, stackable: null, maxStack: 1, color: '#0d9488' },
   { code: 'CHS-tk', name: 'チェーン・ロープスタンド', category: 'パネル', width: null, depth: null, height: 900, price: 2420, weight: null, stackable: null, maxStack: 1, color: '#0d9488' },
   { code: 'CU-01B', name: '間仕切りカーテン', category: 'パネル', width: 1524, depth: null, height: 3048, price: 2200, weight: null, stackable: null, maxStack: 1, color: '#0d9488' },
@@ -173,7 +174,7 @@ const PRODUCT_MASTER = [
   { code: 'PAWR', name: '展示用パネルR(リバーシブル)', category: 'パネル', width: 900, depth: 35, height: 2100, price: 4950, weight: null, stackable: null, maxStack: 1, color: '#0d9488' },
   { code: 'PAtf-tk', name: '三折れパネル', category: 'パネル', width: 900, depth: null, height: 1800, price: 5500, weight: null, stackable: null, maxStack: 1, color: '#0d9488' },
   { code: 'YKP-TK', name: '有孔パネル', category: 'パネル', width: 900, depth: null, height: 1800, price: 3300, weight: null, stackable: null, maxStack: 1, color: '#0d9488' },
-  // パネル・仕切り（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // パネル・仕切り（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'BS', name: 'ベルトパーテーション（イメージサイズ）', category: 'パネル・仕切り', width: 300, depth: 300, height: 900, price: 3630, weight: null, stackable: null, maxStack: 1, color: '#2dd4bf' },
   { code: 'ML', name: 'ミラーパネルライト（イメージサイズ）', category: 'パネル・仕切り', width: 100, depth: 100, height: 300, price: null, weight: null, stackable: null, maxStack: 1, color: '#2dd4bf' },
   { code: 'PAEZ-2100', name: 'システムパネル（白）H2100', category: 'パネル・仕切り', width: 900, depth: 35, height: 2100, price: 3630, weight: null, stackable: null, maxStack: 1, color: '#2dd4bf' },
@@ -190,7 +191,7 @@ const PRODUCT_MASTER = [
   { code: 'PAWB-W3', name: '窓用パネル（W600）', category: 'パネル・仕切り', width: 600, depth: 400, height: 2100, price: 21780, weight: null, stackable: null, maxStack: 1, color: '#2dd4bf' },
   { code: 'PAtf-tk-600', name: '三つ折りパネル（W600）', category: 'パネル・仕切り', width: 600, depth: 35, height: 1800, price: 6050, weight: null, stackable: null, maxStack: 1, color: '#2dd4bf' },
   { code: 'PAtf-tk-900', name: '三つ折りパネル（W900）', category: 'パネル・仕切り', width: 900, depth: 35, height: 1800, price: 6050, weight: null, stackable: null, maxStack: 1, color: '#2dd4bf' },
-  // 鏡(ミラー)（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // 鏡(ミラー)（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'M2', name: 'スタンドミラー', category: '鏡(ミラー)', width: 510, depth: 450, height: 1535, price: 1650, weight: null, stackable: null, maxStack: 1, color: '#ec4899' },
   { code: 'M2-tk', name: '角型卓上ミラー', category: '鏡(ミラー)', width: 345, depth: 200, height: 430, price: null, weight: null, stackable: null, maxStack: 1, color: '#ec4899' },
   { code: 'M2L', name: '女優スタンドミラー', category: '鏡(ミラー)', width: 470, depth: null, height: 1520, price: 6600, weight: null, stackable: null, maxStack: 1, color: '#ec4899' },
@@ -199,7 +200,7 @@ const PRODUCT_MASTER = [
   { code: 'NGANT025', name: '姿見(古美色)', category: '鏡(ミラー)', width: 450, depth: null, height: 1540, price: 3300, weight: null, stackable: null, maxStack: 1, color: '#ec4899' },
   { code: 'NGANT029', name: 'デコレーションミラー・フローラル', category: '鏡(ミラー)', width: null, depth: null, height: null, price: 2750, weight: null, stackable: null, maxStack: 1, color: '#ec4899' },
   { code: 'NGANT031', name: 'アンティークミラー・シルバー', category: '鏡(ミラー)', width: null, depth: null, height: null, price: 1650, weight: null, stackable: null, maxStack: 1, color: '#ec4899' },
-  // テーブル（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // テーブル（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'RT75', name: '丸テーブル(φ750)', category: 'テーブル', width: 750, depth: 750, height: 700, price: 2200, weight: null, stackable: null, maxStack: 1, color: '#ea580c' },
   { code: 'TBS-15tk', name: '折りたたみスタックテーブル', category: 'テーブル', width: 1500, depth: 600, height: 900, price: 6490, weight: null, stackable: null, maxStack: 1, color: '#ea580c' },
   { code: 'TBW18-45', name: 'ホワイトテーブル', category: 'テーブル', width: 1800, depth: 450, height: 700, price: 1650, weight: null, stackable: null, maxStack: 1, color: '#ea580c' },
@@ -218,7 +219,7 @@ const PRODUCT_MASTER = [
   { code: 'TT-330-TO', name: 'ハイカウンターテーブル(半円)W1200', category: 'テーブル', width: 1200, depth: 600, height: 1000, price: 9900, weight: null, stackable: null, maxStack: 1, color: '#ea580c' },
   { code: 'TT-331-TO', name: 'ハイカウンターテーブル(白)W1200', category: 'テーブル', width: 1200, depth: 500, height: 1000, price: 11000, weight: null, stackable: null, maxStack: 1, color: '#ea580c' },
   { code: 'TT-332-TO', name: 'ハイカウンターテーブル(黒)', category: 'テーブル', width: 1800, depth: 500, height: 1000, price: 26400, weight: null, stackable: null, maxStack: 1, color: '#ea580c' },
-  // イス（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // イス（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'CH7', name: 'スタッキングチェア', category: 'イス', width: 490, depth: 540, height: 750, price: 880, weight: null, stackable: null, maxStack: 1, color: '#fb923c' },
   { code: 'CH8-tk', name: 'パイプ椅子', category: 'イス', width: 448, depth: 465, height: 735, price: 550, weight: null, stackable: null, maxStack: 1, color: '#fb923c' },
   { code: 'CHB', name: '黒接客椅子', category: 'イス', width: 490, depth: 540, height: 750, price: 2750, weight: null, stackable: null, maxStack: 1, color: '#fb923c' },
@@ -240,7 +241,7 @@ const PRODUCT_MASTER = [
   { code: 'TC-124-TO', name: '木製ハイチェア', category: 'イス', width: 410, depth: 430, height: 970, price: 7150, weight: null, stackable: null, maxStack: 1, color: '#fb923c' },
   { code: 'TC-125-TO', name: 'シンプルハイチェア', category: 'イス', width: 380, depth: 410, height: 1040, price: 6050, weight: null, stackable: null, maxStack: 1, color: '#fb923c' },
   { code: 'TC-126-TO', name: 'ハイチェアブラック', category: 'イス', width: 500, depth: 530, height: 900, price: 6050, weight: null, stackable: null, maxStack: 1, color: '#fb923c' },
-  // 展示台（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // 展示台（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'CLW', name: '宝飾クラッシーオープン台', category: '展示台', width: 1500, depth: 775, height: 855, price: 27500, weight: null, stackable: null, maxStack: 1, color: '#65a30d' },
   { code: 'DSH-09tk', name: 'オクタナ', category: '展示台', width: 900, depth: 300, height: 340, price: null, weight: null, stackable: null, maxStack: 1, color: '#65a30d' },
   { code: 'DST-88tk', name: 'オリウス', category: '展示台', width: 880, depth: 585, height: 35, price: null, weight: null, stackable: null, maxStack: 1, color: '#65a30d' },
@@ -267,7 +268,7 @@ const PRODUCT_MASTER = [
   { code: 'W15', name: '宝飾ウッドオープン台', category: '展示台', width: 1500, depth: 750, height: 850, price: 11000, weight: null, stackable: null, maxStack: 1, color: '#65a30d' },
   { code: 'W9', name: '宝飾ウッドスクエアオープン台', category: '展示台', width: 590, depth: 590, height: 1057, price: 11000, weight: null, stackable: null, maxStack: 1, color: '#65a30d' },
   { code: 'w20', name: 'ヴィンテージテーブル', category: '展示台', width: 1200, depth: 730, height: 770, price: 4950, weight: null, stackable: null, maxStack: 1, color: '#65a30d' },
-  // ハンガーラック（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // ハンガーラック（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'H1', name: 'シングルハンガー', category: 'ハンガーラック', width: 900, depth: null, height: 1000, price: 2200, weight: null, stackable: null, maxStack: 1, color: '#c026d3' },
   { code: 'H12H', name: '2段式ハンガー', category: 'ハンガーラック', width: 1200, depth: null, height: 1580, price: 2200, weight: null, stackable: null, maxStack: 1, color: '#c026d3' },
   { code: 'H14-tk', name: '真鍮ラック', category: 'ハンガーラック', width: 1400, depth: 450, height: 1310, price: 6380, weight: null, stackable: null, maxStack: 1, color: '#c026d3' },
@@ -296,7 +297,7 @@ const PRODUCT_MASTER = [
   { code: 'NGHAN031', name: '傾斜ハンガー', category: 'ハンガーラック', width: null, depth: null, height: 900, price: 880, weight: null, stackable: null, maxStack: 1, color: '#c026d3' },
   { code: 'NGHAN045', name: '2WAYハンガー', category: 'ハンガーラック', width: 540, depth: null, height: 1000, price: 1320, weight: null, stackable: null, maxStack: 1, color: '#c026d3' },
   { code: 'NGHAN046', name: '回転フック什器', category: 'ハンガーラック', width: null, depth: null, height: 165, price: 3300, weight: null, stackable: null, maxStack: 1, color: '#c026d3' },
-  // ハンガー（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // ハンガー（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'HTO-tk', name: 'トンボハンガー', category: 'ハンガー', width: 750, depth: 750, height: 1050, price: 1100, weight: null, stackable: null, maxStack: 1, color: '#e879f9' },
   { code: 'NGHAN032-1', name: 'スチールハンガー:レディース38cm', category: 'ハンガー', width: 380, depth: null, height: null, price: 220, weight: null, stackable: null, maxStack: 1, color: '#e879f9' },
   { code: 'NGHAN033', name: 'スチールパンツハンガー', category: 'ハンガー', width: 250, depth: null, height: null, price: 220, weight: null, stackable: null, maxStack: 1, color: '#e879f9' },
@@ -304,12 +305,12 @@ const PRODUCT_MASTER = [
   { code: 'NGHAN035', name: 'ウッドパンツハンガー(ブラウン)', category: 'ハンガー', width: 300, depth: null, height: null, price: 330, weight: null, stackable: null, maxStack: 1, color: '#e879f9' },
   { code: 'NGHAN038', name: 'バッグ掛け(古美色)', category: 'ハンガー', width: null, depth: null, height: null, price: 880, weight: null, stackable: null, maxStack: 1, color: '#e879f9' },
   { code: 'NGHAN039', name: '帽子掛け(古美色)', category: 'ハンガー', width: 150, depth: 150, height: null, price: 880, weight: null, stackable: null, maxStack: 1, color: '#e879f9' },
-  // フィッティングルーム（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // フィッティングルーム（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'M1', name: 'フィッティングルーム', category: 'フィッティングルーム', width: 800, depth: 850, height: 1950, price: 5500, weight: null, stackable: null, maxStack: 1, color: '#e11d48' },
   { code: 'M1B-tk', name: 'BOX型フィッティングルーム', category: 'フィッティングルーム', width: 850, depth: 900, height: 1930, price: 8250, weight: null, stackable: null, maxStack: 1, color: '#e11d48' },
-  // 接客カウンター(アパレル)（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // 接客カウンター(アパレル)（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'SC-09tk', name: 'カウンター台', category: '接客カウンター(アパレル)', width: 900, depth: 600, height: 900, price: 5940, weight: null, stackable: null, maxStack: 1, color: '#fb7185' },
-  // アンティーク・ヴィンテージ（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // アンティーク・ヴィンテージ（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'NGANT001', name: 'ヴィンテージキャビネット', category: 'アンティーク・ヴィンテージ', width: 885, depth: 390, height: null, price: 33000, weight: null, stackable: null, maxStack: 1, glass: true, color: '#78716c' },
   { code: 'NGANT002', name: 'ヴィンテージガラスケース', category: 'アンティーク・ヴィンテージ', width: 1220, depth: 305, height: 1285, price: 30800, weight: null, stackable: null, maxStack: 1, glass: true, color: '#78716c' },
   { code: 'NGANT003', name: 'ヴィンテージドレッサー', category: 'アンティーク・ヴィンテージ', width: 1220, depth: 570, height: 1710, price: 27500, weight: null, stackable: null, maxStack: 1, color: '#78716c' },
@@ -347,7 +348,7 @@ const PRODUCT_MASTER = [
   { code: 'NGTAB027', name: 'アンティークラウンドテーブルtypeA', category: 'アンティーク・ヴィンテージ', width: 730, depth: 730, height: 790, price: 11000, weight: null, stackable: null, maxStack: 1, color: '#78716c' },
   { code: 'NGTAB028', name: 'ビボテーブル(大小セット)', category: 'アンティーク・ヴィンテージ', width: 730, depth: 730, height: 790, price: 11000, weight: null, stackable: null, maxStack: 1, color: '#78716c' },
   { code: 'NGTAB031', name: 'バロックテーブル(ブラウン)', category: 'アンティーク・ヴィンテージ', width: 1200, depth: 730, height: 770, price: 5500, weight: null, stackable: null, maxStack: 1, color: '#78716c' },
-  // 和装ディスプレイ（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // 和装ディスプレイ（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'CA0010-tatami', name: 'スタイロ畳', category: '和装ディスプレイ', width: 1760, depth: 880, height: null, price: 1100, weight: null, stackable: null, maxStack: 1, color: '#9f1239' },
   { code: 'CB0010', name: '二段木製衣桁', category: '和装ディスプレイ', width: 1850, depth: 380, height: 1690, price: 3300, weight: null, stackable: null, maxStack: 1, color: '#9f1239' },
   { code: 'CB0060', name: '一段組衣桁', category: '和装ディスプレイ', width: 1840, depth: 400, height: 1735, price: 1980, weight: null, stackable: null, maxStack: 1, color: '#9f1239' },
@@ -362,7 +363,7 @@ const PRODUCT_MASTER = [
   { code: 'CG0130-B', name: '生地掛け(両面型)', category: '和装ディスプレイ', width: 1200, depth: 550, height: 1440, price: 2200, weight: null, stackable: null, maxStack: 1, color: '#9f1239' },
   { code: 'CG0130-S', name: '生地掛け(スクリーン型)', category: '和装ディスプレイ', width: 900, depth: null, height: 1800, price: 2200, weight: null, stackable: null, maxStack: 1, color: '#9f1239' },
   { code: 'CG0140', name: 'ノーマルのれん', category: '和装ディスプレイ', width: 150, depth: 40, height: 80, price: 1100, weight: null, stackable: null, maxStack: 1, color: '#9f1239' },
-  // サインスタンド・イーゼル（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // サインスタンド・イーゼル（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'ESBK', name: '黒イーゼル', category: 'サインスタンド・イーゼル', width: 450, depth: 500, height: 1650, price: 1650, weight: null, stackable: null, maxStack: 1, color: '#52525b' },
   { code: 'ESS', name: 'シルバーイーゼル', category: 'サインスタンド・イーゼル', width: 900, depth: 1000, height: 1300, price: 4400, weight: null, stackable: null, maxStack: 1, color: '#52525b' },
   { code: 'ESW', name: '木製イーゼル', category: 'サインスタンド・イーゼル', width: 600, depth: 530, height: 1560, price: 3300, weight: null, stackable: null, maxStack: 1, color: '#52525b' },
@@ -384,13 +385,13 @@ const PRODUCT_MASTER = [
   { code: 'TO-513-TO', name: '実演時間表示板', category: 'サインスタンド・イーゼル', width: 300, depth: 300, height: 940, price: 9500, weight: null, stackable: null, maxStack: 1, color: '#52525b' },
   { code: 'TO-515-TO', name: 'サインスタンド', category: 'サインスタンド・イーゼル', width: 400, depth: null, height: 390, price: 4950, weight: null, stackable: null, maxStack: 1, color: '#52525b' },
   { code: 'UST-tk', name: 'ユニバーサルサインスタンド', category: 'サインスタンド・イーゼル', width: null, depth: null, height: 1100, price: 4070, weight: null, stackable: null, maxStack: 1, color: '#52525b' },
-  // 受付カウンター（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // 受付カウンター（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'HCW-TK', name: '組み立て式受付ハイカウンター(白)', category: '受付カウンター', width: 1500, depth: 700, height: 900, price: 6600, weight: null, stackable: null, maxStack: 1, color: '#4b5563' },
   { code: 'TR-401-TO', name: 'カウンター(中棚付)', category: '受付カウンター', width: 1800, depth: 600, height: 930, price: 55000, weight: null, stackable: null, maxStack: 1, color: '#4b5563' },
   { code: 'TR-405-TO', name: '受付カウンターA', category: '受付カウンター', width: 900, depth: 450, height: 930, price: 6600, weight: null, stackable: null, maxStack: 1, color: '#4b5563' },
-  // 接客カウンター（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // 接客カウンター（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'TR-402-TO', name: 'ユニットカウンター', category: '接客カウンター', width: 1200, depth: 650, height: 750, price: 13200, weight: null, stackable: null, maxStack: 1, color: '#9ca3af' },
-  // イベント用品（shared/masters/products.json より一括反映。price=税込目安、null=未計測）
+  // イベント用品（company/master/products.json より一括反映。price=税込目安、null=未計測）
   { code: 'BRDP', name: 'Blu-rayプレーヤー', category: 'イベント用品', width: 245, depth: 175, height: 38.5, price: 4400, weight: null, stackable: null, maxStack: 1, color: '#a3e635' },
   { code: 'IRDI-01', name: 'アイリスオーヤマ 50インチ 液晶モニター', category: 'イベント用品', width: null, depth: null, height: null, price: 44000, weight: null, stackable: null, maxStack: 1, color: '#a3e635' },
   { code: 'KST-dan02', name: 'ステージ用階段(屋内専用)', category: 'イベント用品', width: 1000, depth: 360, height: 200, price: 2750, weight: null, stackable: null, maxStack: 1, color: '#a3e635' },

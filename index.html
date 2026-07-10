@@ -8,15 +8,18 @@
 </head>
 <body>
   <nav class="side-nav">
-    <div class="side-brand">STEP <span>Studio</span></div>
+    <div class="side-brand">
+      <img class="side-logo-mark" src="../../company/assets/logo/logo.png" alt="STEP">
+      STEP <span>Studio</span>
+    </div>
 
     <a class="side-item" href="../dashboard/index.html">
       <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9l7-6 7 6"/><path d="M5 8v9h10V8"/></svg>
       Dashboard
     </a>
-    <a class="side-item" href="../layout/html/index.html">
-      <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="6" height="6"/><rect x="11" y="3" width="6" height="6"/><rect x="3" y="11" width="6" height="6"/><rect x="11" y="11" width="6" height="6"/></svg>
-      Layout
+    <a class="side-item" href="../sales/index.html">
+      <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="14" height="9" rx="1.5"/><path d="M7.5 7V5.5C7.5 4.67 8.17 4 9 4h2c.83 0 1.5.67 1.5 1.5V7"/><path d="M3 11.5h14"/></svg>
+      Sales
     </a>
     <a class="side-item" href="../inventory/index.html">
       <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7l7-4 7 4-7 4-7-4z"/><path d="M3 7v6l7 4 7-4V7"/></svg>
@@ -24,23 +27,28 @@
     </a>
 
     <div class="side-group">
-      <div class="side-group-label">Logistics</div>
-      <button class="side-item side-sub is-active">
-        <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9l7-6 7 6"/><path d="M5 8v9h10V8"/></svg>
-        Home
+      <button class="side-group-label" data-toggle-group>
+        <span>Logistics</span>
+        <svg class="side-caret" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8l4 4 4-4"/></svg>
       </button>
-      <a class="side-item side-sub" href="loading.html" title="積載プランナーを開く">
-        <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="9" width="9" height="6" rx="1"/><path d="M11 11h4l3 3v1h-7z"/><circle cx="6" cy="16.5" r="1.3"/><circle cx="15" cy="16.5" r="1.3"/></svg>
-        積載
-      </a>
-      <a class="side-item side-sub is-disabled" title="準備中">
-        <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h11M14 7l-3-3M14 7l-3 3"/></svg>
-        配送
-      </a>
-      <a class="side-item side-sub is-disabled" title="準備中">
-        <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="15" r="2"/><circle cx="15" cy="15" r="2"/><path d="M3 15V6h9l4 4v5"/></svg>
-        配車
-      </a>
+      <div class="side-group-body">
+        <button class="side-item side-sub is-active">
+          <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9l7-6 7 6"/><path d="M5 8v9h10V8"/></svg>
+          Home
+        </button>
+        <a class="side-item side-sub" href="loading.html" title="積載プランナーを開く">
+          <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="9" width="9" height="6" rx="1"/><path d="M11 11h4l3 3v1h-7z"/><circle cx="6" cy="16.5" r="1.3"/><circle cx="15" cy="16.5" r="1.3"/></svg>
+          積載
+        </a>
+        <a class="side-item side-sub is-disabled" title="準備中">
+          <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h11M14 7l-3-3M14 7l-3 3"/></svg>
+          配送
+        </a>
+        <a class="side-item side-sub is-disabled" title="準備中">
+          <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="15" r="2"/><circle cx="15" cy="15" r="2"/><path d="M3 15V6h9l4 4v5"/></svg>
+          配車
+        </a>
+      </div>
     </div>
 
     <a class="side-item" href="../operations/index.html">
@@ -50,6 +58,11 @@
     <a class="side-item" href="../analytics/index.html">
       <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17V9M9 17V4M15 17v-6"/></svg>
       Analytics
+    </a>
+    <div class="side-spacer"></div>
+    <a class="side-item is-disabled" title="準備中">
+      <svg class="side-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.5"/><path d="M10 3v2M10 15v2M17 10h-2M5 10H3M15 5l-1.4 1.4M6.4 13.6L5 15M15 15l-1.4-1.4M6.4 6.4L5 5"/></svg>
+      Settings
     </a>
   </nav>
 
@@ -91,6 +104,12 @@
     document.getElementById('homeLoadingStatus').textContent = saved
       ? '保存済みの積載プランがあります。'
       : 'まだ保存された積載プランはありません。';
+
+    document.querySelectorAll('[data-toggle-group]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.closest('.side-group').classList.toggle('is-collapsed');
+      });
+    });
   </script>
 </body>
 </html>

@@ -423,7 +423,7 @@ function renderProductMasterList() {
 }
 
 /**
- * shared/masters/products.json から一括反映したカテゴリの一覧（色は生成時に割り当てたものと対応）。
+ * company/master/products.json から一括反映したカテゴリの一覧（色は生成時に割り当てたものと対応）。
  * 「商品マスター反映状況」パネルの表示対象・表示順を定義する。
  */
 const REFLECTED_CATEGORIES = [
