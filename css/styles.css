@@ -3,6 +3,9 @@
  * 方針: 見やすい / 分かりやすい / 紙より速い / 教育不要
  * ======================================================================= */
 
+/* モジュール間のページ遷移をView Transitions APIで滑らかにクロスフェードさせる（対応ブラウザのみ有効） */
+@view-transition { navigation: auto; }
+
 :root {
   --bg:        #eef0f3;
   --panel:     #ffffff;
@@ -39,38 +42,61 @@ body { display: flex; height: 100vh; overflow: hidden; }
 button { font-family: inherit; cursor: pointer; }
 input, textarea { font-family: inherit; }
 
-/* ---------------- STEP Studioサイドバー（Inventory/Salesと共通の見た目。Logistics独自のHome/積載/配送/配車のみ） ---------------- */
-/* Ver1.1：拡大＋開閉アニメーション＋ロゴ＋Settings */
+/* ---------------- STEP Studioサイドバー（Ver1.2：全モジュール共通、寸法・配色を完全統一） ---------------- */
 .side-nav {
   width: 260px; flex-shrink: 0; background: #1a1f2b; color: #cfd3dc;
-  display: flex; flex-direction: column; padding: 24px 0; overflow-y: auto;
+  display: flex; flex-direction: column; padding: 24px 0 0; overflow-y: auto;
 }
-.side-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: #fff; padding: 0 22px 24px; letter-spacing: .02em; white-space: nowrap; }
-.side-brand span { color: var(--blue); }
-.side-logo-mark { width: 30px; height: 30px; flex-shrink: 0; object-fit: contain; border-radius: 4px; }
+.side-brand { display: flex; align-items: center; justify-content: space-between; padding: 0 16px 22px 22px; }
+.side-brand-logo { height: 34px; width: auto; display: block; }
+.sidebar-toggle {
+  width: 28px; height: 28px; border-radius: 8px; border: 1px solid #333a48; background: #20242e; color: #9198a4;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; padding: 0;
+}
+.sidebar-toggle:hover { background: #2a2f3b; color: #fff; }
+.sidebar-toggle-icon { transition: transform .2s ease; }
+body.is-sidebar-collapsed .sidebar-toggle-icon { transform: rotate(180deg); }
+
+/* ---------------- サイドバー折りたたみ（アイコンのみ表示） ---------------- */
+body.is-sidebar-collapsed .side-nav { width: 64px; }
+body.is-sidebar-collapsed .side-brand { justify-content: center; padding: 0 0 22px; }
+body.is-sidebar-collapsed .side-brand-logo,
+body.is-sidebar-collapsed .side-label,
+body.is-sidebar-collapsed .side-group-label span,
+body.is-sidebar-collapsed .side-caret { display: none; }
+body.is-sidebar-collapsed .side-item,
+body.is-sidebar-collapsed .side-sub,
+body.is-sidebar-collapsed .side-group-label { justify-content: center; padding-left: 0; padding-right: 0; }
+body.is-sidebar-collapsed .side-group-label { padding-top: 0; padding-bottom: 0; height: 8px; }
+body.is-sidebar-collapsed .side-group-body { grid-template-rows: 1fr !important; opacity: 1 !important; }
 .side-item {
-  display: flex; align-items: center; gap: 14px; padding: 13px 22px; font-size: 15px; color: #cfd3dc;
+  display: flex; align-items: center; gap: 14px; padding: 16px 22px; font-size: 15px; color: #cfd3dc;
   text-decoration: none; white-space: nowrap; border: none; background: none; width: 100%; text-align: left;
-  font-family: inherit; cursor: pointer;
+  font-family: inherit; cursor: pointer; box-sizing: border-box;
 }
 .side-item:hover { background: #232939; }
-.side-item.is-active { background: var(--blue); color: #fff; font-weight: 600; }
+.side-item.is-active { background: #ea580c; color: #fff; font-weight: 600; box-shadow: inset 3px 0 0 0 #fff; }
 .side-item.is-disabled { opacity: .45; cursor: default; }
 .side-item.is-disabled:hover { background: none; }
-/* 共通サイドバー（Ver2）：現在のモジュール(Logistics)だけ.side-groupで子項目を展開する。キャレットクリックで滑らかに開閉（Ver1.1） */
-.side-group { margin: 4px 0; }
+/* 共通サイドバー：現在のモジュール(Logistics)だけ.side-groupで子項目を展開する。キャレットクリックで滑らかに開閉 */
+.side-group { margin: 0; }
 .side-group-label {
-  display: flex; align-items: center; justify-content: space-between; width: 100%; border: none; background: none;
-  padding: 14px 22px 8px; font-size: 12.5px; letter-spacing: .08em; color: #767c8c; text-transform: uppercase;
-  cursor: pointer; font-family: inherit; white-space: nowrap;
+  display: flex; align-items: center; justify-content: space-between; width: 100%; border: none;
+  background: rgba(234,88,12,.2); color: #fff;
+  padding: 16px 22px; font-size: 12.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700;
+  cursor: pointer; font-family: inherit; white-space: nowrap; box-sizing: border-box;
 }
-.side-caret { width: 15px; height: 15px; flex-shrink: 0; transition: transform .24s ease; }
+.side-caret { width: 15px; height: 15px; flex-shrink: 0; color: #fb923c; transition: transform .26s ease; }
 .side-group.is-collapsed .side-caret { transform: rotate(-90deg); }
-.side-group-body { max-height: 600px; overflow: hidden; transition: max-height .28s ease, opacity .22s ease; opacity: 1; }
-.side-group.is-collapsed .side-group-body { max-height: 0; opacity: 0; }
-.side-sub { padding-left: 42px; }
+.side-group-body {
+  display: grid; grid-template-rows: 1fr; transition: grid-template-rows .28s ease, opacity .22s ease; opacity: 1;
+}
+.side-group.is-collapsed .side-group-body { grid-template-rows: 0fr; opacity: 0; }
+.side-group-body-inner { overflow: hidden; min-height: 0; }
+.side-sub { padding-left: 44px; }
+.side-sub.is-active { background: #ea580c; color: #fff; font-weight: 600; box-shadow: inset 3px 0 0 0 #fff; }
 .side-spacer { flex: 1; }
-.side-icon { width: 22px; height: 22px; flex-shrink: 0; }
+.side-icon { width: 26px; height: 26px; flex-shrink: 0; }
 
 /* ---------------- ボタン共通 ---------------- */
 .btn {
